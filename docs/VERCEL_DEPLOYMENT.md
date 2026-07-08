@@ -2,8 +2,12 @@
 
 ## Status
 
-Vercel CLI is available through `npx`, but this session does not have Vercel credentials.
-That means the project cannot be created or linked from here without completing login.
+Vercel project is created and linked.
+
+- Project name: `cad-view`
+- Team: `mauricios-projects-e89a04cd`
+- Production URL: `https://cad-view-pearl.vercel.app`
+- Deployment URL: `https://cad-view-4y98jjcz6-mauricios-projects-e89a04cd.vercel.app`
 
 ## Recommended project name
 
@@ -49,15 +53,8 @@ Preferred fallback:
 ## CLI state
 
 - `npx vercel --version` works
-- `npx vercel whoami` starts the device login flow
-- No authenticated session was available in this workspace
-
-If you want to finish from the terminal later:
-
-1. Run `npx vercel login`
-2. Complete the browser/device authorization
-3. Run `npx vercel link`
-4. Use the same build settings listed above
+- `npx vercel whoami` resolved the account as `mauro42k`
+- `npx vercel link --yes --scope mauricios-projects-e89a04cd --project cad-view` created and linked the project
 
 ## Deployment flow
 

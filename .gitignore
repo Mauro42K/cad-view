@@ -21,3 +21,5 @@ dist/
 *.nwd
 *.nwc
 *.bak
+.vercel
+.env*

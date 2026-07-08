@@ -16,6 +16,7 @@ Vercel is the planned frontend host for now.
 - Node.js target: `24.x`
 - Custom domain: not configured yet
 - See [`docs/VERCEL_DEPLOYMENT.md`](docs/VERCEL_DEPLOYMENT.md) for the exact setup flow
+- Production URL: [cad-view-pearl.vercel.app](https://cad-view-pearl.vercel.app)
 
 ## Stack
 
