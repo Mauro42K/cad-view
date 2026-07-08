@@ -2,7 +2,8 @@
 
 ## Status
 
-Vercel CLI is not available in this environment, so the project cannot be created from here directly.
+Vercel CLI is available through `npx`, but this session does not have Vercel credentials.
+That means the project cannot be created or linked from here without completing login.
 
 ## Recommended project name
 
@@ -44,6 +45,19 @@ Preferred fallback:
 3. Allow Vercel to read the repo.
 4. Select the project name above.
 5. Keep the default branch as `main`.
+
+## CLI state
+
+- `npx vercel --version` works
+- `npx vercel whoami` starts the device login flow
+- No authenticated session was available in this workspace
+
+If you want to finish from the terminal later:
+
+1. Run `npx vercel login`
+2. Complete the browser/device authorization
+3. Run `npx vercel link`
+4. Use the same build settings listed above
 
 ## Deployment flow
 
