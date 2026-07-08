@@ -43,11 +43,12 @@ Fecha: 2026-07-08
 
 - Se añadió un panel de performance visible en la UI para registrar tiempos de carga sin exponer contenido del dibujo.
 - En el DWG real de `4.3 MB` el tramo de lectura local fue de `44 ms`.
-- El tiempo fuerte sigue estando dentro de `openDocument`, que tardó alrededor de `1m 03s` en esta corrida.
-- `Parsing named dictionaries...` siguió activo como cola larga antes del `ready` real.
+- El tiempo fuerte sigue estando dentro de `openDocument`, que llegó a `100%` alrededor de `41 s` pero todavía no significa que el dibujo sea usable.
+- `Parsing named dictionaries...` siguió activo como cola larga antes del cierre visual.
+- El primer baseline visual útil se registró alrededor de `2:03` con confirmación manual.
 - El viewer reportó progreso intermedio mientras convertía entidades, y la UI mantuvo mensajes de carga lentos a los `30 s` y `2 min`.
-- El estado `ready` ya se marca después de que el render termina de asentarse visualmente.
 - `entity 100%` no se trata como final; el panel agrupa por fase para que el tramo final siga siendo legible sin inundarlo con repeticiones.
+- La UI ahora deja un botón pequeño de `Mark visually ready` para registrar la marca manual cuando el dibujo ya es usable.
 
 ## Workers y assets
 
@@ -87,7 +88,8 @@ Fecha: 2026-07-08
 - La renderización de textos y cotas depende de que el repositorio de fuentes disponible tenga el font catalog correcto; si no, la UI lo avisará y el dibujo puede verse incompleto.
 - Las fuentes propietarias no se commitean en este repo; el apoyo a repositorios privados está preparado pero vacío por diseño.
 - El cuello de botella de `openDocument` sigue dentro del motor para este DWG concreto; todavía no se hizo una optimización del parsing.
-- El cuello de botella más visible siguió siendo el tramo de `Parsing named dictionaries...` y la cola final hasta `viewer ready`.
+- El cuello de botella más visible siguió siendo el tramo de `Parsing named dictionaries...` y la cola final hasta la marca visual.
+- El baseline sirve para comparar futuras actualizaciones de mlightcad, optimizaciones y otros DWG/DXF reales.
 
 ## Próximos pasos
 

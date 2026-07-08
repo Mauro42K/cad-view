@@ -30,6 +30,7 @@ interface PerfRun {
   arrayBufferReadyAt?: number
   openDocumentStartAt?: number
   openDocumentResolvedAt?: number
+  visualReadyAt?: number
   readyAt?: number
   errorAt?: number
   progressLabel?: string
@@ -169,11 +170,42 @@ function finalizePerfRun(state: 'ready' | 'error', message: string) {
   const endedAt = getNow()
   perfRun.value.finalMessage = message
   if (state === 'ready') {
-    perfRun.value.readyAt = endedAt
+    perfRun.value.visualReadyAt ??= endedAt
   } else {
     perfRun.value.errorAt = endedAt
   }
-  recordPerfCheckpoint(state === 'ready' ? 'viewer ready' : 'error', message, state)
+  recordPerfCheckpoint(state === 'ready' ? 'visual ready' : 'error', message, state)
+}
+
+function markVisuallyReady() {
+  if (!perfRun.value || perfRun.value.visualReadyAt || perfRun.value.errorAt) return
+  const endedAt = getNow()
+  perfRun.value.visualReadyAt = endedAt
+  perfRun.value.readyAt = endedAt
+  const readElapsed =
+    perfRun.value.arrayBufferStartAt !== undefined && perfRun.value.arrayBufferReadyAt !== undefined
+      ? perfRun.value.arrayBufferReadyAt - perfRun.value.arrayBufferStartAt
+      : undefined
+  const openElapsed =
+    perfRun.value.openDocumentStartAt !== undefined && perfRun.value.openDocumentResolvedAt !== undefined
+      ? perfRun.value.openDocumentResolvedAt - perfRun.value.openDocumentStartAt
+      : undefined
+  const visualElapsed =
+    perfRun.value.openDocumentResolvedAt !== undefined
+      ? endedAt - perfRun.value.openDocumentResolvedAt
+      : undefined
+  const totalElapsed = endedAt - perfRun.value.startedAt
+  const summaryParts = [
+    readElapsed !== undefined ? `read ${formatDuration(readElapsed)}` : '',
+    openElapsed !== undefined ? `openDocument ${formatDuration(openElapsed)}` : '',
+    visualElapsed !== undefined ? `visual ${formatDuration(visualElapsed)}` : '',
+    totalElapsed !== undefined ? `total ${formatDuration(totalElapsed)}` : ''
+  ].filter(Boolean)
+  const summary = summaryParts.length > 0 ? ` (${summaryParts.join(', ')})` : ''
+  const readyMessage = `${perfRun.value.fileName} visually ready in the browser.${summary}`
+  setStatus('ready', readyMessage)
+  setLoadingNote('')
+  recordPerfCheckpoint('visual ready', readyMessage, 'visual ready')
 }
 
 function setLoadingNote(note: string) {
@@ -356,14 +388,14 @@ function onOpenFileProgress(payload: {
   percentage?: number
   stageStatus?: string
 }) {
-  if (!perfRun.value || perfRun.value.readyAt || perfRun.value.errorAt) return
+  if (!perfRun.value || perfRun.value.visualReadyAt || perfRun.value.errorAt) return
   const progressMessage = describeProgress(payload)
   setLoadingNote(progressMessage)
   recordProgressMessage(payload)
 }
 
 function onFailedToOpenFile(payload: { fileName: string }) {
-  if (!perfRun.value || perfRun.value.readyAt || perfRun.value.errorAt) return
+  if (!perfRun.value || perfRun.value.visualReadyAt || perfRun.value.errorAt) return
   const at = getNow()
   const message = `Viewer reported a file-open failure for ${payload.fileName}.`
   perfRun.value.errorAt = at
@@ -519,10 +551,16 @@ async function openLocalFile(file: File, origin: FileOrigin = 'selected') {
       totalElapsed !== undefined ? `total ${formatDuration(totalElapsed)}` : ''
     ].filter(Boolean)
     const summary = summaryParts.length > 0 ? ` (${summaryParts.join(', ')})` : ''
-    const readyMessage = `${file.name} opened locally in the browser.${summary}`
-    setStatus('ready', readyMessage)
-    setLoadingNote('')
-    finalizePerfRun('ready', readyMessage)
+    const readyMessage = `${file.name} parsed and waiting for visual ready confirmation.${summary}`
+    setStatus('loading', readyMessage)
+    setLoadingNote(perfRun.value?.currentProgressMessage ?? 'Finalizing CAD document...')
+    if (perfRun.value && !perfRun.value.visualReadyAt) {
+      recordPerfCheckpoint(
+        'awaiting visual ready',
+        'Click Mark visually ready when the drawing looks usable.',
+        'awaiting-visual-ready'
+      )
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Could not open the selected file.'
     errorMessage.value = message
@@ -706,18 +744,34 @@ onBeforeUnmount(() => {
             <strong>{{ perfRun.openDocumentStartAt && perfRun.openDocumentResolvedAt ? formatDuration(perfRun.openDocumentResolvedAt - perfRun.openDocumentStartAt) : 'n/a' }}</strong>
           </div>
           <div>
-            <span>Settle</span>
-            <strong>{{ perfRun.openDocumentResolvedAt && (perfRun.readyAt || perfRun.errorAt) ? formatDuration((perfRun.readyAt ?? perfRun.errorAt ?? getNow()) - perfRun.openDocumentResolvedAt) : 'n/a' }}</strong>
+            <span>Visual</span>
+            <strong>
+              {{
+                perfRun.visualReadyAt && perfRun.openDocumentResolvedAt
+                  ? formatDuration(perfRun.visualReadyAt - perfRun.openDocumentResolvedAt)
+                  : perfRun.openDocumentResolvedAt
+                    ? formatDuration(getNow() - perfRun.openDocumentResolvedAt)
+                    : 'n/a'
+              }}
+            </strong>
           </div>
           <div>
             <span>Total</span>
-            <strong>{{ perfRun.readyAt || perfRun.errorAt ? formatDuration((perfRun.readyAt ?? perfRun.errorAt) - perfRun.startedAt) : 'running' }}</strong>
+            <strong>{{ perfRun.visualReadyAt || perfRun.errorAt ? formatDuration(((perfRun.visualReadyAt ?? perfRun.errorAt) - perfRun.startedAt)) : 'running' }}</strong>
           </div>
           <div>
             <span>Pipeline</span>
             <strong>{{ perfRun.currentProgressMessage ?? 'waiting...' }}</strong>
           </div>
         </div>
+        <button
+          v-if="perfRun && perfRun.openDocumentResolvedAt && !perfRun.visualReadyAt && !perfRun.errorAt"
+          type="button"
+          class="perf-ready-button"
+          @click="markVisuallyReady"
+        >
+          Mark visually ready
+        </button>
         <ul v-if="perfRun" class="perf-timeline">
           <li v-for="event in perfRun.checkpoints" :key="`${event.key}-${event.at}`">
             <strong>{{ event.label }}</strong>
