@@ -2,7 +2,8 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   AcApDocManager,
-  applyUiTheme
+  applyUiTheme,
+  eventBus
 } from '@mlightcad/cad-simple-viewer'
 import { registerSimpleUiPlugin } from '@mlightcad/cad-simple-ui-plugin/register'
 
@@ -16,6 +17,7 @@ const fileName = ref('')
 const fileSizeText = ref('')
 const isDropTargetActive = ref(false)
 const viewerResetMessage = ref('')
+const fontWarning = ref('')
 const hasInitialized = ref(false)
 const fileInputEl = ref<HTMLInputElement | null>(null)
 const lastOpenedFile = ref<{ name: string; size: number; content: ArrayBuffer } | null>(null)
@@ -24,6 +26,38 @@ const workerUrls = {
   dxfParser: './assets/dxf-parser-worker.js',
   dwgParser: './assets/libredwg-parser-worker.js',
   mtextRender: './assets/mtext-renderer-worker.js'
+}
+
+const fontBaseUrl = 'https://cdn.jsdelivr.net/gh/mlightcad/cad-data/'
+
+function onViewerFontIssue(message: string) {
+  fontWarning.value = message
+}
+
+function onViewerVisibilityChange() {
+  if (document.visibilityState === 'visible' && status.value === 'ready') {
+    void reopenLastFile('Viewer was paused or reset while inactive.')
+  }
+}
+
+function onFontsNotFound(payload: { fonts: string[] }) {
+  if (payload.fonts.length === 0) return
+  onViewerFontIssue(
+    `Some CAD fonts are missing: ${payload.fonts.slice(0, 3).join(', ')}${payload.fonts.length > 3 ? '…' : ''}. Text or dimensions may be incomplete.`
+  )
+}
+
+function onFontsNotLoaded(payload: { fonts: Array<{ fontName: string; url: string }> }) {
+  if (payload.fonts.length === 0) return
+  const firstFont = payload.fonts[0]
+  onViewerFontIssue(
+    `Some CAD fonts could not be loaded from ${fontBaseUrl}. The viewer may render text or dimensions incompletely.`
+  )
+  console.debug('[CAD View] font loading failed', firstFont)
+}
+
+function onFontRepositoryUnavailable(payload: { url: string }) {
+  onViewerFontIssue(`Font repository unavailable at ${payload.url}. Text or dimensions may be incomplete.`)
 }
 
 function setStatus(next: ViewerState, message: string) {
@@ -57,11 +91,15 @@ async function ensureViewer() {
       throw new Error('CAD worker scripts are not reachable.')
     }
 
+    eventBus.on('fonts-not-found', onFontsNotFound)
+    eventBus.on('fonts-not-loaded', onFontsNotLoaded)
+    eventBus.on('failed-to-get-avaiable-fonts', onFontRepositoryUnavailable)
+
     AcApDocManager.createInstance({
       container: viewerHost.value,
       busyIndicatorHost: viewerHost.value,
+      baseUrl: fontBaseUrl,
       webworkerFileUrls: workerUrls,
-      notLoadDefaultFonts: true,
       checkWorkersOnInit: true
     })
 
@@ -103,6 +141,7 @@ async function openLocalFile(file: File) {
   fileSizeText.value = formatFileSize(file.size)
   errorMessage.value = ''
   viewerResetMessage.value = ''
+  fontWarning.value = ''
 
   try {
     const content = await file.arrayBuffer()
@@ -200,14 +239,14 @@ async function reopenLastFile(reason: string) {
 
 onMounted(() => {
   void ensureViewer()
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && status.value === 'ready') {
-      void reopenLastFile('Viewer was paused or reset while inactive.')
-    }
-  })
+  document.addEventListener('visibilitychange', onViewerVisibilityChange)
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', onViewerVisibilityChange)
+  eventBus.off('fonts-not-found', onFontsNotFound)
+  eventBus.off('fonts-not-loaded', onFontsNotLoaded)
+  eventBus.off('failed-to-get-avaiable-fonts', onFontRepositoryUnavailable)
   AcApDocManager.instance?.dispose?.()
 })
 </script>
@@ -240,6 +279,7 @@ onBeforeUnmount(() => {
         <p v-if="fileName" class="file-name">{{ fileName }}</p>
         <p v-if="fileSizeText" class="file-size">{{ fileSizeText }}</p>
         <p v-if="viewerResetMessage" class="warning">{{ viewerResetMessage }}</p>
+        <p v-if="fontWarning" class="warning">{{ fontWarning }}</p>
         <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
       </div>
     </section>

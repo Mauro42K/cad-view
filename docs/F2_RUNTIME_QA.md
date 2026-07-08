@@ -7,14 +7,14 @@ Fecha: 2026-07-08
 - Repo: `/Users/mauro/cad-view`
 - Node: `v24.18.0`
 - pnpm: `10.17.1`
-- Browser: Playwright Chromium dentro de la sesión de Codex
+- Browser: Google Chrome headless local
 - URL: `http://127.0.0.1:5173`
 
 ## Comandos ejecutados
 
 - `pnpm dev --host 127.0.0.1`
 - `pnpm build`
-- Verificación en navegador con Playwright
+- Verificación visual con Google Chrome headless y captura PNG
 
 ## Resultado de shell
 
@@ -48,7 +48,9 @@ Fecha: 2026-07-08
 ## Consola del navegador
 
 - Antes del ajuste, aparecía un error por intento de cargar `fonts.json` desde un CDN que devolvía `404`.
-- Se corrigió desactivando la carga automática de fuentes por defecto con `notLoadDefaultFonts: true`.
+- La causa probable fue una combinación de `notLoadDefaultFonts: true` y una `baseUrl` sin slash final, que rompía la resolución de `fonts.json` y de assets de fuentes.
+- El shell se corrigió reactivando la carga por defecto de fuentes con `baseUrl: 'https://cdn.jsdelivr.net/gh/mlightcad/cad-data/'`.
+- La UI ahora muestra un aviso visible si el repositorio de fuentes no responde o si faltan fuentes concretas.
 - Después del ajuste, la consola quedó sin errores críticos de app.
 - Los abortos `ERR_ABORTED` de workers al arrancar se observaron como parte del flujo de inicialización y no bloquearon la UI.
 
@@ -70,11 +72,13 @@ Fecha: 2026-07-08
 - `viewer-runtime.iife.js` no está presente en el paquete instalado y no se usa como requisito obligatorio.
 - El build sigue generando un chunk grande; eso no bloquea la apertura local, pero conviene vigilarlo si el shell crece.
 - La recuperación tras inactividad reabre el último archivo en memoria, pero sigue siendo una restauración de sesión, no almacenamiento persistente.
+- La renderización de textos y cotas depende de que el repositorio remoto de fuentes esté disponible; si falla, la UI lo avisará y el dibujo puede verse incompleto.
 
 ## Próximos pasos
 
 - Conseguir al menos un DXF y un DWG reales para probar apertura y render.
 - Verificar que seleccionar archivo dispara `loading` y luego `ready` o `error`.
 - Confirmar que el dropzone acepta solo `.dwg` y `.dxf`.
+- Volver a abrir un DWG real y confirmar si los textos y cotas reaparecen con la base de fuentes corregida.
 - Simular inactividad o cambio de visibilidad para validar el mensaje de recuperación.
-- Si se necesitan fuentes específicas para renderización, definir una estrategia explícita de assets en lugar de usar la descarga automática por defecto.
+- Si todavía faltan textos o cotas, aislar si el caso depende de SHX, dimensiones, XRefs u objetos proxy.
