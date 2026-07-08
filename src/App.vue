@@ -102,12 +102,18 @@ async function openLocalFile(file: File) {
   errorMessage.value = ''
 
   try {
+    const content = await file.arrayBuffer()
     console.debug('[CAD View] opening local file', {
       name: file.name,
       size: file.size,
       type: file.type || 'unknown'
     })
-    await manager.openFile(file)
+    const opened = await manager.openDocument(file.name, content, {
+      mode: 0
+    })
+    if (!opened) {
+      throw new Error('The viewer rejected the selected file.')
+    }
     setStatus('ready', `${file.name} opened locally in the browser.`)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Could not open the selected file.'

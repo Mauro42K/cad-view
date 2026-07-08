@@ -18,8 +18,8 @@
 
 ## File opening
 
-- [ ] Open a local `.dxf` - no CAD fixtures were available in this environment
-- [ ] Open a local `.dwg` - no CAD fixtures were available in this environment
+- [ ] Open a local `.dxf` - pending a real fixture after API wiring fix
+- [ ] Open a local `.dwg` - pending a real fixture after API wiring fix
 - [x] Button opens the file picker
 - [x] Selecting a file shows name, size, and `loading`
 - [x] Status changes to ready after a successful open or error on failure

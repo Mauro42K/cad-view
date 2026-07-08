@@ -29,7 +29,7 @@ Fecha: 2026-07-08
 - La UI muestra nombre y tamaño del archivo antes del intento de apertura.
 - El dropzone mínimo propio queda sobre el viewer para arrastrar `.dwg` y `.dxf`.
 - Si el usuario suelta un archivo con otra extensión, la UI marca error y no intenta abrirlo.
-- No se documentó una limitación del plugin para este caso; el problema era de wiring del shell.
+- El problema real detectado fue una llamada incorrecta: se estaba usando `openFile`, pero la API disponible es `openDocument(fileName, ArrayBuffer, options)`.
 
 ## Workers y assets
 
@@ -60,9 +60,9 @@ Fecha: 2026-07-08
 
 ## Errores conocidos
 
-- No se validó apertura de archivos reales por falta de fixtures locales.
 - `viewer-runtime.iife.js` no está presente en el paquete instalado y no se usa como requisito obligatorio.
 - El build sigue generando un chunk grande; eso no bloquea la apertura local, pero conviene vigilarlo si el shell crece.
+- La apertura real de archivos CAD debe validarse con un DXF/DWG local en el navegador tras este ajuste.
 
 ## Próximos pasos
 
