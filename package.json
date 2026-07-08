@@ -1,11 +1,14 @@
 {
   "name": "cad-view",
+  "description": "Private local browser viewer for DWG and DXF files.",
   "private": true,
+  "packageManager": "pnpm@10.17.1",
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "typecheck": "tsc -b --noEmit",
     "preview": "vite preview"
   },
   "dependencies": {

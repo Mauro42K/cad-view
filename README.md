@@ -2,6 +2,12 @@
 
 Private browser viewer for local DWG/DXF files.
 
+## Repository
+
+- Private GitHub repo: `git@github.com:Mauro42K/cad-view.git`
+- Main branch: `main`
+- Scope: local-only viewer, no backend, no auth, no deploy
+
 ## Stack
 
 - Vite
@@ -22,19 +28,46 @@ pnpm install
 pnpm dev
 ```
 
-## Production check
+## Common commands
 
 ```bash
+pnpm typecheck
 pnpm build
 pnpm preview
 ```
+
+## Dependabot
+
+Dependabot checks npm/pnpm dependencies weekly on `main`.
+
+- No automatic merges
+- No runtime changes without review
+- PRs should be validated with `pnpm build` before merging
+
+If `@mlightcad/*` updates land, review:
+
+- release notes upstream
+- worker/runtime asset changes
+- any required build or path updates
+
+## Updating `@mlightcad`
+
+When bumping `@mlightcad/cad-simple-viewer` or `@mlightcad/cad-simple-ui-plugin`:
+
+1. Read the changelog or release notes.
+2. Install the new versions locally.
+3. Run `pnpm build`.
+4. Test at least one local DWG and one local DXF.
+5. Confirm worker and asset paths still resolve.
 
 ## Notes
 
 - Files are opened locally in the browser.
 - No backend is used.
 - No CAD files are uploaded to a server.
+- Do not commit private CAD files or proprietary source files.
 - Viewer workers are copied to `dist/assets/` during build.
+- Keep private sample drawings outside the repo or covered by `.gitignore`.
 
 ## Runtime assets
 
