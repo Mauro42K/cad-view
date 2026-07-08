@@ -16,7 +16,8 @@
 - [x] `@mlightcad/cad-simple-ui-plugin` toolbar renders
 - [x] Worker readiness check passes before file open
 - [x] Default CAD fonts are allowed to load from `https://cdn.jsdelivr.net/gh/mlightcad/cad-data/`
-- [x] Missing-font situations surface a visible warning instead of failing silently
+- [x] Known missing fonts can fall back to an in-memory substitute
+- [x] Missing-font situations surface a visible warning or fallback note instead of failing silently
 
 ## File opening
 
@@ -44,6 +45,7 @@
 - [ ] `assets/viewer-runtime.iife.js` is present in `dist/` only if the installed package exposes that runtime asset
 - [x] Worker URLs resolve correctly in dev and build
 - [x] Font assets are resolved from the configured `baseUrl` instead of a broken `fonts.json` path
+- [x] `public/cad-fonts/` is prepared as a safe placeholder for private fonts
 
 ## UI checks
 
@@ -52,4 +54,4 @@
 - [x] Note about local-only files is visible
 - [x] Viewer area is visible and usable
 - [x] Layout remains readable on a narrow viewport
-- [x] Font warning copy is visible when the viewer cannot resolve fonts
+- [x] Font warning or fallback note is visible when the viewer cannot resolve fonts

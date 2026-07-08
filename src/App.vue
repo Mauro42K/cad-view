@@ -8,6 +8,7 @@ import {
 import { registerSimpleUiPlugin } from '@mlightcad/cad-simple-ui-plugin/register'
 
 type ViewerState = 'idle' | 'loading' | 'ready' | 'error'
+type FontMapping = Record<string, string>
 
 const viewerHost = ref<HTMLElement | null>(null)
 const status = ref<ViewerState>('idle')
@@ -18,9 +19,16 @@ const fileSizeText = ref('')
 const isDropTargetActive = ref(false)
 const viewerResetMessage = ref('')
 const fontWarning = ref('')
+const fontFallbackNote = ref('')
 const hasInitialized = ref(false)
 const fileInputEl = ref<HTMLInputElement | null>(null)
 const lastOpenedFile = ref<{ name: string; size: number; content: ArrayBuffer } | null>(null)
+const appliedFontMapping: FontMapping = {}
+const fallbackFontMap: FontMapping = {
+  dutcheb: 'hztxt',
+  isocteur: 'hztxt',
+  owens_brwy_std: 'hztxt'
+}
 
 const workerUrls = {
   dxfParser: './assets/dxf-parser-worker.js',
@@ -28,7 +36,35 @@ const workerUrls = {
   mtextRender: './assets/mtext-renderer-worker.js'
 }
 
-const fontBaseUrl = 'https://cdn.jsdelivr.net/gh/mlightcad/cad-data/'
+const defaultFontBaseUrl = 'https://cdn.jsdelivr.net/gh/mlightcad/cad-data/'
+const fontBaseUrl = ensureTrailingSlash(
+  (import.meta.env.VITE_CAD_FONTS_BASE_URL as string | undefined)?.trim() ||
+    defaultFontBaseUrl
+)
+
+function ensureTrailingSlash(value: string) {
+  return value.endsWith('/') ? value : `${value}/`
+}
+
+function normalizeFontName(fontName: string) {
+  return fontName.trim().toLowerCase()
+}
+
+function getFallbackFont(fontName: string) {
+  return fallbackFontMap[normalizeFontName(fontName)]
+}
+
+function applyFontMapping(fontName: string, mappedFont: string) {
+  const normalizedName = normalizeFontName(fontName)
+  if (appliedFontMapping[normalizedName] === mappedFont) return
+  appliedFontMapping[normalizedName] = mappedFont
+
+  const renderer = AcApDocManager.instance.curView.renderer as unknown as {
+    setFontMapping?: (mapping: FontMapping) => void
+  }
+  renderer.setFontMapping?.({ ...appliedFontMapping })
+  AcApDocManager.instance.regen()
+}
 
 function onViewerFontIssue(message: string) {
   fontWarning.value = message
@@ -58,6 +94,19 @@ function onFontsNotLoaded(payload: { fonts: Array<{ fontName: string; url: strin
 
 function onFontRepositoryUnavailable(payload: { url: string }) {
   onViewerFontIssue(`Font repository unavailable at ${payload.url}. Text or dimensions may be incomplete.`)
+}
+
+function onFontMissing(payload: { fontName: string; count: number }) {
+  const fallbackFont = getFallbackFont(payload.fontName)
+  if (fallbackFont) {
+    applyFontMapping(payload.fontName, fallbackFont)
+    fontFallbackNote.value = `Fallback font applied for ${payload.fontName} → ${fallbackFont}. Add the original font locally for higher fidelity.`
+    fontWarning.value = ''
+    return
+  }
+
+  const missingCount = payload.count > 1 ? ` (${payload.count} entities)` : ''
+  fontWarning.value = `Some CAD fonts are missing: ${payload.fontName}${missingCount}. Text or dimensions may be incomplete.`
 }
 
 function setStatus(next: ViewerState, message: string) {
@@ -94,6 +143,7 @@ async function ensureViewer() {
     eventBus.on('fonts-not-found', onFontsNotFound)
     eventBus.on('fonts-not-loaded', onFontsNotLoaded)
     eventBus.on('failed-to-get-avaiable-fonts', onFontRepositoryUnavailable)
+    eventBus.on('font-not-found', onFontMissing)
 
     AcApDocManager.createInstance({
       container: viewerHost.value,
@@ -142,6 +192,7 @@ async function openLocalFile(file: File) {
   errorMessage.value = ''
   viewerResetMessage.value = ''
   fontWarning.value = ''
+  fontFallbackNote.value = ''
 
   try {
     const content = await file.arrayBuffer()
@@ -247,6 +298,7 @@ onBeforeUnmount(() => {
   eventBus.off('fonts-not-found', onFontsNotFound)
   eventBus.off('fonts-not-loaded', onFontsNotLoaded)
   eventBus.off('failed-to-get-avaiable-fonts', onFontRepositoryUnavailable)
+  eventBus.off('font-not-found', onFontMissing)
   AcApDocManager.instance?.dispose?.()
 })
 </script>
@@ -279,6 +331,7 @@ onBeforeUnmount(() => {
         <p v-if="fileName" class="file-name">{{ fileName }}</p>
         <p v-if="fileSizeText" class="file-size">{{ fileSizeText }}</p>
         <p v-if="viewerResetMessage" class="warning">{{ viewerResetMessage }}</p>
+        <p v-if="fontFallbackNote" class="info">{{ fontFallbackNote }}</p>
         <p v-if="fontWarning" class="warning">{{ fontWarning }}</p>
         <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
       </div>

@@ -50,7 +50,8 @@ Fecha: 2026-07-08
 - Antes del ajuste, aparecía un error por intento de cargar `fonts.json` desde un CDN que devolvía `404`.
 - La causa probable fue una combinación de `notLoadDefaultFonts: true` y una `baseUrl` sin slash final, que rompía la resolución de `fonts.json` y de assets de fuentes.
 - El shell se corrigió reactivando la carga por defecto de fuentes con `baseUrl: 'https://cdn.jsdelivr.net/gh/mlightcad/cad-data/'`.
-- La UI ahora muestra un aviso visible si el repositorio de fuentes no responde o si faltan fuentes concretas.
+- La UI ahora aplica un fallback de sesión para algunas fuentes faltantes conocidas y muestra una nota visible cuando entra en modo degradado.
+- Si falta una fuente que no tiene fallback, la UI sigue mostrando un aviso visible.
 - Después del ajuste, la consola quedó sin errores críticos de app.
 - Los abortos `ERR_ABORTED` de workers al arrancar se observaron como parte del flujo de inicialización y no bloquearon la UI.
 
@@ -72,7 +73,8 @@ Fecha: 2026-07-08
 - `viewer-runtime.iife.js` no está presente en el paquete instalado y no se usa como requisito obligatorio.
 - El build sigue generando un chunk grande; eso no bloquea la apertura local, pero conviene vigilarlo si el shell crece.
 - La recuperación tras inactividad reabre el último archivo en memoria, pero sigue siendo una restauración de sesión, no almacenamiento persistente.
-- La renderización de textos y cotas depende de que el repositorio remoto de fuentes esté disponible; si falla, la UI lo avisará y el dibujo puede verse incompleto.
+- La renderización de textos y cotas depende de que el repositorio de fuentes disponible tenga el font catalog correcto; si no, la UI lo avisará y el dibujo puede verse incompleto.
+- Las fuentes propietarias no se commitean en este repo; el apoyo a repositorios privados está preparado pero vacío por diseño.
 
 ## Próximos pasos
 
@@ -82,3 +84,4 @@ Fecha: 2026-07-08
 - Volver a abrir un DWG real y confirmar si los textos y cotas reaparecen con la base de fuentes corregida.
 - Simular inactividad o cambio de visibilidad para validar el mensaje de recuperación.
 - Si todavía faltan textos o cotas, aislar si el caso depende de SHX, dimensiones, XRefs u objetos proxy.
+- Si se van a añadir fuentes privadas, hacerlo en `public/cad-fonts/fonts/` y verificar que desaparece el warning de fuentes.
