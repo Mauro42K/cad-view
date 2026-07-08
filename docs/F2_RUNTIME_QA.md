@@ -14,6 +14,7 @@ Fecha: 2026-07-08
 
 - `pnpm dev --host 127.0.0.1`
 - `pnpm build`
+- `pnpm preview --host 127.0.0.1 --port 4174`
 - Verificación visual con Google Chrome headless y captura PNG
 
 ## Resultado de shell
@@ -38,6 +39,14 @@ Fecha: 2026-07-08
 - La app conserva solo metadata de sesión en memoria para poder reabrir el último archivo durante la misma sesión.
 - No se usa `localStorage`, no se sube nada al servidor y no se persiste el CAD en disco.
 
+## F2.1 - Performance baseline
+
+- Se añadió un panel de performance visible en la UI para registrar tiempos de carga sin exponer contenido del dibujo.
+- En el DWG real de `4.3 MB` el tramo de lectura local fue de decenas de milisegundos.
+- El tiempo fuerte sigue estando dentro de `openDocument`, que tardó alrededor de `53 s` en esta corrida.
+- El viewer reportó progreso intermedio mientras convertía entidades, y la UI mantuvo mensajes de carga lentos a los `30 s` y `2 min`.
+- El estado `ready` ya se marca después de que el render termina de asentarse visualmente.
+
 ## Workers y assets
 
 - `assets/dxf-parser-worker.js` responde `200` en dev.
@@ -57,15 +66,15 @@ Fecha: 2026-07-08
 
 ## Carga DXF/DWG
 
-- No se probaron archivos DXF/DWG reales en este entorno.
-- No había fixtures CAD locales disponibles para cargar desde el navegador.
-- El siguiente paso manual es seleccionar o arrastrar un `.dxf` y un `.dwg` reales para validar el cambio de estado `loading -> ready/error`.
+- Se probó un DWG real de `4.3 MB` desde `/Users/mauro/Downloads/2_Piso de Maquinas_N+20.00_RJ_IDE-H2.dwg`.
+- No había un DXF real disponible en el workspace para validar esa ruta.
+- El siguiente paso manual es repetir con un `.dxf` real para confirmar que el mismo baseline aplica.
 
 ## Estado de UI
 
 - `idle` o pantalla inicial: visible al cargar.
 - `loading`: visible durante la inicialización.
-- `ready`: visible después de que el viewer termina de inicializar.
+- `ready`: visible después de que el viewer termina de inicializar y asentarse visualmente.
 - `error`: no se reprodujo con la configuración actual.
 
 ## Errores conocidos
@@ -75,6 +84,7 @@ Fecha: 2026-07-08
 - La recuperación tras inactividad reabre el último archivo en memoria, pero sigue siendo una restauración de sesión, no almacenamiento persistente.
 - La renderización de textos y cotas depende de que el repositorio de fuentes disponible tenga el font catalog correcto; si no, la UI lo avisará y el dibujo puede verse incompleto.
 - Las fuentes propietarias no se commitean en este repo; el apoyo a repositorios privados está preparado pero vacío por diseño.
+- El cuello de botella de `openDocument` sigue dentro del motor para este DWG concreto; todavía no se hizo una optimización del parsing.
 
 ## Próximos pasos
 
@@ -85,3 +95,4 @@ Fecha: 2026-07-08
 - Simular inactividad o cambio de visibilidad para validar el mensaje de recuperación.
 - Si todavía faltan textos o cotas, aislar si el caso depende de SHX, dimensiones, XRefs u objetos proxy.
 - Si se van a añadir fuentes privadas, hacerlo en `public/cad-fonts/fonts/` y verificar que desaparece el warning de fuentes.
+- Usar [`docs/F2_1_PERFORMANCE_BASELINE.md`](docs/F2_1_PERFORMANCE_BASELINE.md) como referencia para comparar futuros cambios de rendimiento.

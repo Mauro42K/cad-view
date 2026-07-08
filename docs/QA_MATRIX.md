@@ -4,7 +4,7 @@
 
 - [x] `pnpm install` completes successfully
 - [x] `pnpm build` completes successfully
-- [ ] `pnpm preview` starts and serves the built app
+- [x] `pnpm preview` starts and serves the built app
 - [x] Node version is `>= 24`
 - [x] pnpm version is `>= 10`
 
@@ -21,14 +21,24 @@
 
 ## File opening
 
-- [ ] Open a local `.dxf` - pending a real fixture after API wiring fix
-- [ ] Open a local `.dwg` - pending a real fixture after API wiring fix
+- [ ] Open a local `.dxf` - pending a real fixture for this baseline
+- [x] Open a local `.dwg`
 - [x] Button opens the file picker
 - [x] Selecting a file shows name, size, and `loading`
 - [x] Button and drag & drop use the same `openDocument` flow
 - [x] Status changes to ready after a successful open or error on failure
 - [x] Error state appears when a file cannot be parsed or file type is unsupported
 - [x] No file is uploaded to a server
+
+## Performance baseline
+
+- [x] File selection is timestamped in the UI baseline panel
+- [x] `arrayBuffer` read start and ready are timestamped
+- [x] `openDocument` start and viewer-ready are timestamped
+- [x] Slow parsing hints appear after 30 seconds and 2 minutes
+- [x] The viewer stays responsive while a large DWG is parsing
+- [x] Baseline timings are recorded in `docs/F2_1_PERFORMANCE_BASELINE.md`
+- [x] The main bottleneck is documented as the viewer's parsing/render pipeline, not local file reading
 
 ## Viewer reset
 
@@ -55,3 +65,4 @@
 - [x] Viewer area is visible and usable
 - [x] Layout remains readable on a narrow viewport
 - [x] Font warning or fallback note is visible when the viewer cannot resolve fonts
+- [x] Performance baseline panel is visible for development/MVP use
