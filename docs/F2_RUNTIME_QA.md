@@ -42,10 +42,12 @@ Fecha: 2026-07-08
 ## F2.1 - Performance baseline
 
 - Se añadió un panel de performance visible en la UI para registrar tiempos de carga sin exponer contenido del dibujo.
-- En el DWG real de `4.3 MB` el tramo de lectura local fue de decenas de milisegundos.
-- El tiempo fuerte sigue estando dentro de `openDocument`, que tardó alrededor de `53 s` en esta corrida.
+- En el DWG real de `4.3 MB` el tramo de lectura local fue de `44 ms`.
+- El tiempo fuerte sigue estando dentro de `openDocument`, que tardó alrededor de `1m 03s` en esta corrida.
+- `Parsing named dictionaries...` siguió activo como cola larga antes del `ready` real.
 - El viewer reportó progreso intermedio mientras convertía entidades, y la UI mantuvo mensajes de carga lentos a los `30 s` y `2 min`.
 - El estado `ready` ya se marca después de que el render termina de asentarse visualmente.
+- `entity 100%` no se trata como final; el panel agrupa por fase para que el tramo final siga siendo legible sin inundarlo con repeticiones.
 
 ## Workers y assets
 
@@ -85,6 +87,7 @@ Fecha: 2026-07-08
 - La renderización de textos y cotas depende de que el repositorio de fuentes disponible tenga el font catalog correcto; si no, la UI lo avisará y el dibujo puede verse incompleto.
 - Las fuentes propietarias no se commitean en este repo; el apoyo a repositorios privados está preparado pero vacío por diseño.
 - El cuello de botella de `openDocument` sigue dentro del motor para este DWG concreto; todavía no se hizo una optimización del parsing.
+- El cuello de botella más visible siguió siendo el tramo de `Parsing named dictionaries...` y la cola final hasta `viewer ready`.
 
 ## Próximos pasos
 

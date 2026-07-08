@@ -11,10 +11,14 @@ type ViewerState = 'idle' | 'loading' | 'ready' | 'error'
 type FontMapping = Record<string, string>
 type FileOrigin = 'selected' | 'dropped'
 
-interface PerfEvent {
+interface PerfCheckpoint {
+  key: string
   label: string
   detail: string
   at: number
+  delta: number
+  total: number
+  count: number
 }
 
 interface PerfRun {
@@ -25,6 +29,7 @@ interface PerfRun {
   arrayBufferStartAt?: number
   arrayBufferReadyAt?: number
   openDocumentStartAt?: number
+  openDocumentResolvedAt?: number
   readyAt?: number
   errorAt?: number
   progressLabel?: string
@@ -32,7 +37,11 @@ interface PerfRun {
   progressBucket?: string
   progressAt?: number
   finalMessage?: string
-  events: PerfEvent[]
+  currentProgressMessage?: string
+  currentProgressKey?: string
+  currentProgressPercentage?: number
+  currentProgressStatus?: string
+  checkpoints: PerfCheckpoint[]
 }
 
 const viewerHost = ref<HTMLElement | null>(null)
@@ -104,12 +113,30 @@ function clearSlowParseTimers() {
   }
 }
 
-function pushPerfEvent(label: string, detail = '') {
+function recordPerfCheckpoint(label: string, detail = '', key = label) {
   if (!perfRun.value) return
-  perfRun.value.events.push({
+  const at = getNow()
+  const checkpoints = perfRun.value.checkpoints
+  const index = checkpoints.findIndex(entry => entry.key === key)
+  if (index >= 0) {
+    const existing = checkpoints[index]
+    existing.label = label
+    existing.detail = detail
+    existing.at = at
+    existing.total = at - perfRun.value.startedAt
+    existing.count += 1
+    return
+  }
+
+  const previous = checkpoints[checkpoints.length - 1]
+  checkpoints.push({
+    key,
     label,
     detail,
-    at: getNow()
+    at,
+    delta: previous ? at - previous.at : at - perfRun.value.startedAt,
+    total: at - perfRun.value.startedAt,
+    count: 1
   })
 }
 
@@ -121,11 +148,15 @@ function beginPerfRun(file: File, origin: FileOrigin) {
     fileSizeText: formatFileSize(file.size),
     origin,
     startedAt,
-    events: [
+    checkpoints: [
       {
+        key: origin,
         label: origin === 'selected' ? 'file selected' : 'file dropped',
         detail: file.name,
-        at: startedAt
+        at: startedAt,
+        delta: 0,
+        total: 0,
+        count: 1
       }
     ]
   }
@@ -142,11 +173,7 @@ function finalizePerfRun(state: 'ready' | 'error', message: string) {
   } else {
     perfRun.value.errorAt = endedAt
   }
-  perfRun.value.events.push({
-    label: state === 'ready' ? 'viewer ready' : 'error',
-    detail: message,
-    at: endedAt
-  })
+  recordPerfCheckpoint(state === 'ready' ? 'viewer ready' : 'error', message, state)
 }
 
 function setLoadingNote(note: string) {
@@ -161,13 +188,24 @@ function describeProgress(data: {
 }) {
   const stage = data.stage?.toUpperCase()
   const subStage = data.subStage?.toUpperCase()
+  const stageStatus = data.stageStatus?.toUpperCase()
   const percentage =
     typeof data.percentage === 'number' ? ` ${Math.round(data.percentage)}%` : ''
+  if (stageStatus === 'ERROR') {
+    return 'File open failed.'
+  }
   if (stage === 'FETCH_FILE') {
     return `Fetching CAD file from source${percentage}`
   }
   if (stage === 'CONVERSION') {
+    if (subStage === 'ENTITY' && (data.percentage ?? 0) >= 100) {
+      return 'Finalizing CAD document...'
+    }
+    if (subStage === 'END') {
+      return 'Finalizing CAD document...'
+    }
     if (subStage) {
+      if (subStage === 'OBJECT') return 'Parsing named dictionaries...'
       return `Processing CAD file… ${subStage.replace(/_/g, ' ').toLowerCase()}${percentage}`
     }
     return `Processing CAD file…${percentage}`
@@ -199,6 +237,62 @@ async function waitForViewerToSettle() {
     }
     await new Promise(resolve => window.setTimeout(resolve, 250))
   }
+}
+
+function describeProgressKey(payload: {
+  stage?: string
+  subStage?: string
+  stageStatus?: string
+}) {
+  const stage = payload.stage?.toUpperCase() ?? 'UNKNOWN'
+  if (stage === 'FETCH_FILE') return 'FETCH_FILE'
+  const subStage = payload.subStage?.toUpperCase()
+  if (!subStage) return stage
+  return `${stage}:${subStage}`
+}
+
+function recordProgressMessage(payload: {
+  stage?: string
+  subStage?: string
+  percentage?: number
+  stageStatus?: string
+}) {
+  if (!perfRun.value) return
+  const at = getNow()
+  const key = describeProgressKey(payload)
+  const label = payload.subStage?.toUpperCase() ?? payload.stage?.toUpperCase() ?? 'progress'
+  const detail = describeProgress(payload)
+  const percentage = typeof payload.percentage === 'number' ? Math.round(payload.percentage) : undefined
+  perfRun.value.progressLabel = payload.stage?.toUpperCase()
+  perfRun.value.progressDetail = payload.subStage?.toUpperCase() ?? payload.stageStatus?.toUpperCase() ?? ''
+  perfRun.value.progressAt = at
+  perfRun.value.currentProgressMessage = detail
+  perfRun.value.currentProgressKey = key
+  perfRun.value.currentProgressPercentage = percentage
+  perfRun.value.currentProgressStatus = payload.stageStatus?.toUpperCase()
+
+  const checkpoints = perfRun.value.checkpoints
+  const index = checkpoints.findIndex(entry => entry.key === key)
+  if (index >= 0) {
+    const existing = checkpoints[index]
+    existing.label = label
+    existing.detail = detail
+    existing.at = at
+    existing.total = at - perfRun.value.startedAt
+    existing.count += 1
+    return
+  }
+
+  const previous = checkpoints[checkpoints.length - 1]
+  checkpoints.push({
+    key,
+    label,
+    detail,
+    at,
+    delta: previous ? at - previous.at : at - perfRun.value.startedAt,
+    total: at - perfRun.value.startedAt,
+    count: 1
+  })
 }
 
 function applyFontMapping(fontName: string, mappedFont: string) {
@@ -263,23 +357,9 @@ function onOpenFileProgress(payload: {
   stageStatus?: string
 }) {
   if (!perfRun.value || perfRun.value.readyAt || perfRun.value.errorAt) return
-  const at = getNow()
-  perfRun.value.progressLabel = payload.stage ?? 'unknown'
-  perfRun.value.progressDetail = payload.subStage ?? payload.stageStatus ?? ''
-  perfRun.value.progressAt = at
   const progressMessage = describeProgress(payload)
   setLoadingNote(progressMessage)
-  const percentage = payload.percentage ?? -1
-  const percentageBucket =
-    percentage >= 0 ? `${perfRun.value.progressLabel}:${Math.floor(percentage / 10)}` : perfRun.value.progressLabel ?? 'unknown'
-  if (perfRun.value.progressBucket !== percentageBucket) {
-    perfRun.value.progressBucket = percentageBucket
-    perfRun.value.events.push({
-      label: 'viewer progress',
-      detail: progressMessage,
-      at
-    })
-  }
+  recordProgressMessage(payload)
 }
 
 function onFailedToOpenFile(payload: { fileName: string }) {
@@ -288,11 +368,7 @@ function onFailedToOpenFile(payload: { fileName: string }) {
   const message = `Viewer reported a file-open failure for ${payload.fileName}.`
   perfRun.value.errorAt = at
   perfRun.value.finalMessage = message
-  perfRun.value.events.push({
-    label: 'viewer error',
-    detail: message,
-    at
-  })
+  recordPerfCheckpoint('viewer error', message, 'error')
 }
 
 function setStatus(next: ViewerState, message: string) {
@@ -387,12 +463,12 @@ async function openLocalFile(file: File, origin: FileOrigin = 'selected') {
     }
     if (perfRun.value && !perfRun.value.arrayBufferStartAt) {
       perfRun.value.arrayBufferStartAt = getNow()
-      pushPerfEvent('arrayBuffer read started', file.name)
+      recordPerfCheckpoint('arrayBuffer read started', file.name)
     }
     const content = await file.arrayBuffer()
     if (perfRun.value && !perfRun.value.arrayBufferReadyAt) {
       perfRun.value.arrayBufferReadyAt = getNow()
-      pushPerfEvent('arrayBuffer ready', formatFileSize(file.size))
+      recordPerfCheckpoint('arrayBuffer ready', formatFileSize(file.size))
     }
     lastOpenedFile.value = { name: file.name, size: file.size, content }
     console.debug('[CAD View] opening local file', {
@@ -402,7 +478,7 @@ async function openLocalFile(file: File, origin: FileOrigin = 'selected') {
     })
     if (perfRun.value && !perfRun.value.openDocumentStartAt) {
       perfRun.value.openDocumentStartAt = getNow()
-      pushPerfEvent('openDocument started', file.name)
+      recordPerfCheckpoint('openDocument started', file.name)
       scheduleSlowParseHints()
       setLoadingNote('Parsing CAD file...')
     }
@@ -411,6 +487,14 @@ async function openLocalFile(file: File, origin: FileOrigin = 'selected') {
     })
     if (!opened) {
       throw new Error('The viewer rejected the selected file.')
+    }
+    if (perfRun.value && !perfRun.value.openDocumentResolvedAt) {
+      perfRun.value.openDocumentResolvedAt = getNow()
+      recordPerfCheckpoint('openDocument resolved', file.name, 'openDocument resolved')
+      setLoadingNote(
+        perfRun.value.currentProgressMessage ??
+          'Finalizing CAD document...'
+      )
     }
     await waitForViewerToSettle()
     const totalElapsed =
@@ -422,11 +506,16 @@ async function openLocalFile(file: File, origin: FileOrigin = 'selected') {
         : undefined
     const openElapsed =
       perfRun.value?.openDocumentStartAt !== undefined
-        ? getNow() - perfRun.value.openDocumentStartAt
+        ? (perfRun.value.openDocumentResolvedAt ?? getNow()) - perfRun.value.openDocumentStartAt
+        : undefined
+    const settleElapsed =
+      perfRun.value?.openDocumentResolvedAt !== undefined
+        ? getNow() - perfRun.value.openDocumentResolvedAt
         : undefined
     const summaryParts = [
       readElapsed !== undefined ? `read ${formatDuration(readElapsed)}` : '',
       openElapsed !== undefined ? `openDocument ${formatDuration(openElapsed)}` : '',
+      settleElapsed !== undefined ? `settle ${formatDuration(settleElapsed)}` : '',
       totalElapsed !== undefined ? `total ${formatDuration(totalElapsed)}` : ''
     ].filter(Boolean)
     const summary = summaryParts.length > 0 ? ` (${summaryParts.join(', ')})` : ''
@@ -614,17 +703,27 @@ onBeforeUnmount(() => {
           </div>
           <div>
             <span>openDocument</span>
-            <strong>{{ perfRun.openDocumentStartAt && (perfRun.readyAt || perfRun.errorAt) ? formatDuration((perfRun.readyAt ?? perfRun.errorAt ?? getNow()) - perfRun.openDocumentStartAt) : 'n/a' }}</strong>
+            <strong>{{ perfRun.openDocumentStartAt && perfRun.openDocumentResolvedAt ? formatDuration(perfRun.openDocumentResolvedAt - perfRun.openDocumentStartAt) : 'n/a' }}</strong>
+          </div>
+          <div>
+            <span>Settle</span>
+            <strong>{{ perfRun.openDocumentResolvedAt && (perfRun.readyAt || perfRun.errorAt) ? formatDuration((perfRun.readyAt ?? perfRun.errorAt ?? getNow()) - perfRun.openDocumentResolvedAt) : 'n/a' }}</strong>
           </div>
           <div>
             <span>Total</span>
             <strong>{{ perfRun.readyAt || perfRun.errorAt ? formatDuration((perfRun.readyAt ?? perfRun.errorAt) - perfRun.startedAt) : 'running' }}</strong>
           </div>
+          <div>
+            <span>Pipeline</span>
+            <strong>{{ perfRun.currentProgressMessage ?? 'waiting...' }}</strong>
+          </div>
         </div>
         <ul v-if="perfRun" class="perf-timeline">
-          <li v-for="event in perfRun.events" :key="`${event.label}-${event.at}`">
+          <li v-for="event in perfRun.checkpoints" :key="`${event.key}-${event.at}`">
             <strong>{{ event.label }}</strong>
-            <span>{{ formatDuration(event.at - perfRun.startedAt) }}</span>
+            <span>{{ formatDuration(event.total) }}</span>
+            <small>+{{ formatDuration(event.delta) }}</small>
+            <small v-if="event.count > 1">{{ event.count }} updates</small>
             <small v-if="event.detail">{{ event.detail }}</small>
           </li>
         </ul>

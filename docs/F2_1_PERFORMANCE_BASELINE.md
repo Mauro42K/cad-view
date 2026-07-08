@@ -28,10 +28,11 @@ Fecha: 2026-07-08
 
 ## Resultados observados
 
-- `file selected -> arrayBuffer ready`: ~`70 ms`
-- `file selected -> openDocument started`: ~`76 ms`
-- `openDocument started -> viewer ready`: ~`53 s`
-- `file selected -> viewer ready`: ~`53 s`
+- `file selected -> arrayBuffer ready`: ~`44 ms`
+- `file selected -> openDocument started`: ~`52 ms`
+- `openDocument started -> openDocument resolved`: ~`1m 03s`
+- `openDocument started -> viewer ready`: ~`1m 03s`
+- `file selected -> viewer ready`: ~`1m 03s`
 
 ## Progreso del viewer observado
 
@@ -48,6 +49,9 @@ El viewer reportó etapas de conversión/render con estos hitos visibles:
 - `entity 81%`
 - `entity 91%`
 - `entity 100%`
+- `Parsing named dictionaries...`
+- `Finalizing CAD document...`
+- `END`
 
 ## Conclusión
 
@@ -55,6 +59,7 @@ El viewer reportó etapas de conversión/render con estos hitos visibles:
 - El tiempo fuerte está dentro de `openDocument`, que incluye parsing/conversión/render del engine.
 - No se observó una espera artificial en la app.
 - El estado visual ya muestra progreso lento después de 30 s y mantiene el usuario informado.
+- `entity 100%` no es el final real: el pipeline sigue con finalización y el estado correcto termina en `viewer ready`.
 - La UI quedó alineada para considerar `ready` solo cuando el viewer termina de asentarse visualmente.
 
 ## Limitaciones
@@ -62,6 +67,7 @@ El viewer reportó etapas de conversión/render con estos hitos visibles:
 - No se cambió el engine ni la arquitectura.
 - No se concluyó una optimización de parsing porque no hay evidencia suficiente para modificar el motor.
 - El cuello de botella principal sigue estando dentro del pipeline del viewer para este DWG concreto.
+- `Parsing named dictionaries...` siguió siendo el tramo largo más visible antes de que el viewer quede listo.
 
 ## Próximo paso si se quiere optimizar
 
@@ -70,4 +76,3 @@ Antes de tocar el motor, validar si el mismo archivo:
 - abre más rápido en otros navegadores
 - tarda similar en otros DWG de tamaño parecido
 - reduce tiempo si se eliminan capas, XRefs u objetos complejos
-

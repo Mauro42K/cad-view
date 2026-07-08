@@ -29,16 +29,19 @@
 - [x] Status changes to ready after a successful open or error on failure
 - [x] Error state appears when a file cannot be parsed or file type is unsupported
 - [x] No file is uploaded to a server
+- [x] Real DWG baseline shows `openDocument` around `1m 03s` for the `4.3 MB` test file
 
 ## Performance baseline
 
 - [x] File selection is timestamped in the UI baseline panel
 - [x] `arrayBuffer` read start and ready are timestamped
 - [x] `openDocument` start and viewer-ready are timestamped
+- [x] `openDocument` resolved and `viewer ready` are separated in the UI
 - [x] Slow parsing hints appear after 30 seconds and 2 minutes
 - [x] The viewer stays responsive while a large DWG is parsing
 - [x] Baseline timings are recorded in `docs/F2_1_PERFORMANCE_BASELINE.md`
 - [x] The main bottleneck is documented as the viewer's parsing/render pipeline, not local file reading
+- [x] `entity 100%` is not treated as final; finalization continues through `Parsing named dictionaries...` and `END`
 
 ## Viewer reset
 
