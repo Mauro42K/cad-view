@@ -24,12 +24,19 @@ Fecha: 2026-07-08
 
 ## F2b - Apertura local
 
-- El flujo de apertura quedó explícito con un botón real que dispara el selector de archivos.
+- El flujo de apertura quedó explícito con un botón real que dispara el selector de archivos nativo.
 - El selector acepta `.dwg` y `.dxf`.
-- La UI muestra nombre y tamaño del archivo antes del intento de apertura.
+- La UI muestra nombre, tamaño y estado `loading` antes del intento de apertura.
 - El dropzone mínimo propio queda sobre el viewer para arrastrar `.dwg` y `.dxf`.
 - Si el usuario suelta un archivo con otra extensión, la UI marca error y no intenta abrirlo.
-- El problema real detectado fue una llamada incorrecta: se estaba usando `openFile`, pero la API disponible es `openDocument(fileName, ArrayBuffer, options)`.
+- El botón usa el mismo flujo que drag & drop: `openDocument(fileName, ArrayBuffer, options)`.
+
+## F2c - Picker y reset del viewer
+
+- El botón `Open Local CAD file` usa `showPicker()` cuando el navegador lo soporta y cae a `click()` como respaldo.
+- Si el viewer se pierde tras inactividad o vuelve desde un estado oculto, la UI muestra un mensaje claro de recuperación.
+- La app conserva solo metadata de sesión en memoria para poder reabrir el último archivo durante la misma sesión.
+- No se usa `localStorage`, no se sube nada al servidor y no se persiste el CAD en disco.
 
 ## Workers y assets
 
@@ -62,11 +69,12 @@ Fecha: 2026-07-08
 
 - `viewer-runtime.iife.js` no está presente en el paquete instalado y no se usa como requisito obligatorio.
 - El build sigue generando un chunk grande; eso no bloquea la apertura local, pero conviene vigilarlo si el shell crece.
-- La apertura real de archivos CAD debe validarse con un DXF/DWG local en el navegador tras este ajuste.
+- La recuperación tras inactividad reabre el último archivo en memoria, pero sigue siendo una restauración de sesión, no almacenamiento persistente.
 
 ## Próximos pasos
 
 - Conseguir al menos un DXF y un DWG reales para probar apertura y render.
 - Verificar que seleccionar archivo dispara `loading` y luego `ready` o `error`.
 - Confirmar que el dropzone acepta solo `.dwg` y `.dxf`.
+- Simular inactividad o cambio de visibilidad para validar el mensaje de recuperación.
 - Si se necesitan fuentes específicas para renderización, definir una estrategia explícita de assets en lugar de usar la descarga automática por defecto.

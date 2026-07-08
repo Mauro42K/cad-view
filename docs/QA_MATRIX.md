@@ -22,9 +22,17 @@
 - [ ] Open a local `.dwg` - pending a real fixture after API wiring fix
 - [x] Button opens the file picker
 - [x] Selecting a file shows name, size, and `loading`
+- [x] Button and drag & drop use the same `openDocument` flow
 - [x] Status changes to ready after a successful open or error on failure
 - [x] Error state appears when a file cannot be parsed or file type is unsupported
 - [x] No file is uploaded to a server
+
+## Viewer reset
+
+- [x] File picker falls back from `showPicker()` to `click()`
+- [x] UI shows a clear message if the viewer resets after inactivity
+- [x] Last file metadata stays in memory only for the current session
+- [x] No `localStorage` or server persistence is used
 
 ## Workers and assets
 

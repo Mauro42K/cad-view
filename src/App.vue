@@ -15,8 +15,10 @@ const errorMessage = ref('')
 const fileName = ref('')
 const fileSizeText = ref('')
 const isDropTargetActive = ref(false)
+const viewerResetMessage = ref('')
 const hasInitialized = ref(false)
 const fileInputEl = ref<HTMLInputElement | null>(null)
+const lastOpenedFile = ref<{ name: string; size: number; content: ArrayBuffer } | null>(null)
 
 const workerUrls = {
   dxfParser: './assets/dxf-parser-worker.js',
@@ -100,9 +102,11 @@ async function openLocalFile(file: File) {
   fileName.value = file.name
   fileSizeText.value = formatFileSize(file.size)
   errorMessage.value = ''
+  viewerResetMessage.value = ''
 
   try {
     const content = await file.arrayBuffer()
+    lastOpenedFile.value = { name: file.name, size: file.size, content }
     console.debug('[CAD View] opening local file', {
       name: file.name,
       size: file.size,
@@ -131,7 +135,13 @@ function onFileChange(event: Event) {
 }
 
 function triggerFilePicker() {
-  fileInputEl.value?.click()
+  const input = fileInputEl.value
+  if (!input) return
+  if (typeof input.showPicker === 'function') {
+    input.showPicker()
+    return
+  }
+  input.click()
 }
 
 function onViewerDragOver(event: DragEvent) {
@@ -162,8 +172,39 @@ function onViewerDrop(event: DragEvent) {
   void openLocalFile(file)
 }
 
+async function reopenLastFile(reason: string) {
+  if (!lastOpenedFile.value) {
+    viewerResetMessage.value = reason
+    return
+  }
+
+  viewerResetMessage.value = reason
+  try {
+    setStatus('loading', `${reason} Reopening ${lastOpenedFile.value.name}...`)
+    const opened = await AcApDocManager.instance.openDocument(
+      lastOpenedFile.value.name,
+      lastOpenedFile.value.content,
+      { mode: 0 }
+    )
+    if (!opened) {
+      throw new Error('The viewer rejected the reloaded file.')
+    }
+    setStatus('ready', `${lastOpenedFile.value.name} restored after viewer reset.`)
+    viewerResetMessage.value = ''
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Could not restore the last file.'
+    errorMessage.value = message
+    setStatus('error', 'Viewer reset recovery failed.')
+  }
+}
+
 onMounted(() => {
   void ensureViewer()
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && status.value === 'ready') {
+      void reopenLastFile('Viewer was paused or reset while inactive.')
+    }
+  })
 })
 
 onBeforeUnmount(() => {
@@ -198,6 +239,7 @@ onBeforeUnmount(() => {
         <p class="status">{{ statusMessage }}</p>
         <p v-if="fileName" class="file-name">{{ fileName }}</p>
         <p v-if="fileSizeText" class="file-size">{{ fileSizeText }}</p>
+        <p v-if="viewerResetMessage" class="warning">{{ viewerResetMessage }}</p>
         <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
       </div>
     </section>

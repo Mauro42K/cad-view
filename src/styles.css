@@ -162,6 +162,11 @@ input {
   color: #8fa2cc;
 }
 
+.warning {
+  margin: 0;
+  color: #f5c86a;
+}
+
 @media (max-width: 900px) {
   .app-shell {
     padding: 18px;
