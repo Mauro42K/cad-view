@@ -20,8 +20,10 @@
 
 - [ ] Open a local `.dxf` - no CAD fixtures were available in this environment
 - [ ] Open a local `.dwg` - no CAD fixtures were available in this environment
-- [ ] Status changes to ready after a successful open
-- [ ] Error state appears when a file cannot be parsed
+- [x] Button opens the file picker
+- [x] Selecting a file shows name, size, and `loading`
+- [x] Status changes to ready after a successful open or error on failure
+- [x] Error state appears when a file cannot be parsed or file type is unsupported
 - [x] No file is uploaded to a server
 
 ## Workers and assets

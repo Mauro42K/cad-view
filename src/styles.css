@@ -88,6 +88,15 @@ input {
   gap: 12px;
 }
 
+.file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .file-button {
   display: inline-flex;
   align-items: center;
@@ -100,6 +109,7 @@ input {
   font-weight: 700;
   cursor: pointer;
   width: fit-content;
+  border: 0;
 }
 
 .file-button input {
@@ -140,6 +150,16 @@ input {
   overflow: hidden;
   border: 1px solid rgba(160, 184, 255, 0.12);
   background: rgba(4, 8, 16, 0.72);
+}
+
+.viewer-host.is-drop-active {
+  border-color: rgba(111, 136, 255, 0.8);
+  box-shadow: inset 0 0 0 2px rgba(111, 136, 255, 0.18);
+}
+
+.file-size {
+  margin: 0;
+  color: #8fa2cc;
 }
 
 @media (max-width: 900px) {

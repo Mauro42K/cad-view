@@ -13,7 +13,10 @@ const status = ref<ViewerState>('idle')
 const statusMessage = ref('Ready to open a local DWG or DXF file.')
 const errorMessage = ref('')
 const fileName = ref('')
+const fileSizeText = ref('')
+const isDropTargetActive = ref(false)
 const hasInitialized = ref(false)
+const fileInputEl = ref<HTMLInputElement | null>(null)
 
 const workerUrls = {
   dxfParser: './assets/dxf-parser-worker.js',
@@ -24,6 +27,18 @@ const workerUrls = {
 function setStatus(next: ViewerState, message: string) {
   status.value = next
   statusMessage.value = message
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  const units = ['KB', 'MB', 'GB']
+  let value = bytes / 1024
+  let unitIndex = 0
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`
 }
 
 async function ensureViewer() {
@@ -83,9 +98,15 @@ async function openLocalFile(file: File) {
   status.value = 'loading'
   statusMessage.value = `Opening ${file.name}...`
   fileName.value = file.name
+  fileSizeText.value = formatFileSize(file.size)
   errorMessage.value = ''
 
   try {
+    console.debug('[CAD View] opening local file', {
+      name: file.name,
+      size: file.size,
+      type: file.type || 'unknown'
+    })
     await manager.openFile(file)
     setStatus('ready', `${file.name} opened locally in the browser.`)
   } catch (error) {
@@ -101,6 +122,38 @@ function onFileChange(event: Event) {
   if (!file) return
   void openLocalFile(file)
   if (input) input.value = ''
+}
+
+function triggerFilePicker() {
+  fileInputEl.value?.click()
+}
+
+function onViewerDragOver(event: DragEvent) {
+  event.preventDefault()
+  event.stopPropagation()
+  isDropTargetActive.value = true
+}
+
+function onViewerDragLeave(event: DragEvent) {
+  event.preventDefault()
+  event.stopPropagation()
+  isDropTargetActive.value = false
+}
+
+function onViewerDrop(event: DragEvent) {
+  event.preventDefault()
+  event.stopPropagation()
+  isDropTargetActive.value = false
+
+  const file = event.dataTransfer?.files?.[0]
+  if (!file) return
+  if (!/\.(dwg|dxf)$/i.test(file.name)) {
+    errorMessage.value = 'Only .dwg and .dxf files are accepted.'
+    setStatus('error', 'Unsupported file type.')
+    return
+  }
+
+  void openLocalFile(file)
 }
 
 onMounted(() => {
@@ -126,16 +179,19 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="controls">
-        <label class="file-button">
-          <input
-            type="file"
-            accept=".dwg,.dxf"
-            @change="onFileChange"
-          />
-          <span>Open local CAD file</span>
-        </label>
+        <input
+          ref="fileInputEl"
+          class="file-input"
+          type="file"
+          accept=".dwg,.dxf"
+          @change="onFileChange"
+        />
+        <button type="button" class="file-button" @click="triggerFilePicker">
+          Open Local CAD file
+        </button>
         <p class="status">{{ statusMessage }}</p>
         <p v-if="fileName" class="file-name">{{ fileName }}</p>
+        <p v-if="fileSizeText" class="file-size">{{ fileSizeText }}</p>
         <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
       </div>
     </section>
@@ -149,7 +205,14 @@ onBeforeUnmount(() => {
         <span class="state-pill" :data-state="status">{{ status }}</span>
       </div>
 
-      <div ref="viewerHost" class="viewer-host" />
+      <div
+        ref="viewerHost"
+        class="viewer-host"
+        :class="{ 'is-drop-active': isDropTargetActive }"
+        @dragover="onViewerDragOver"
+        @dragleave="onViewerDragLeave"
+        @drop="onViewerDrop"
+      />
     </section>
   </main>
 </template>
