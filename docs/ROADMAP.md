@@ -28,6 +28,17 @@ GitHub private repo hygiene:
 - `.gitignore` hardened for CAD and source assets
 - Basic package metadata cleaned up
 
+## F4
+
+Vercel frontend deployment setup:
+
+- Create a Vercel project for the private GitHub repo
+- Use Vite build settings with `pnpm install` and `pnpm build`
+- Keep output directory as `dist`
+- Use Node.js `24.x` on Vercel if available
+- Do not configure a custom domain yet
+- Keep the app frontend-only
+
 ## Next likely steps after F3
 
 1. Validate dependency update flow on a real PR.

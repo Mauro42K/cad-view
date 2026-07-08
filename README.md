@@ -8,6 +8,15 @@ Private browser viewer for local DWG/DXF files.
 - Main branch: `main`
 - Scope: local-only viewer, no backend, no auth, no deploy
 
+## Deployment
+
+Vercel is the planned frontend host for now.
+
+- Build settings: Vite preset, `pnpm install`, `pnpm build`, `dist`
+- Node.js target: `24.x`
+- Custom domain: not configured yet
+- See [`docs/VERCEL_DEPLOYMENT.md`](docs/VERCEL_DEPLOYMENT.md) for the exact setup flow
+
 ## Stack
 
 - Vite
