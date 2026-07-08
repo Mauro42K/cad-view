@@ -29,7 +29,7 @@
 - [ ] `assets/dxf-parser-worker.js` is present in `dist/`
 - [ ] `assets/libredwg-parser-worker.js` is present in `dist/`
 - [ ] `assets/mtext-renderer-worker.js` is present in `dist/`
-- [ ] `assets/viewer-runtime.iife.js` is present in `dist/`
+- [ ] `assets/viewer-runtime.iife.js` is present in `dist/` only if the installed package exposes that runtime asset
 - [ ] Worker URLs resolve correctly in dev and build
 
 ## UI checks
