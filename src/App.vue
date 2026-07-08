@@ -44,6 +44,7 @@ async function ensureViewer() {
       container: viewerHost.value,
       busyIndicatorHost: viewerHost.value,
       webworkerFileUrls: workerUrls,
+      notLoadDefaultFonts: true,
       checkWorkersOnInit: true
     })
 

@@ -2,40 +2,40 @@
 
 ## Build and setup
 
-- [ ] `pnpm install` completes successfully
-- [ ] `pnpm build` completes successfully
+- [x] `pnpm install` completes successfully
+- [x] `pnpm build` completes successfully
 - [ ] `pnpm preview` starts and serves the built app
-- [ ] Node version is `>= 24`
-- [ ] pnpm version is `>= 10`
+- [x] Node version is `>= 24`
+- [x] pnpm version is `>= 10`
 
 ## Viewer initialization
 
-- [ ] App shell loads without console errors
-- [ ] Viewer host mounts successfully
-- [ ] `@mlightcad/cad-simple-viewer` initializes
-- [ ] `@mlightcad/cad-simple-ui-plugin` toolbar renders
-- [ ] Worker readiness check passes before file open
+- [x] App shell loads without console errors
+- [x] Viewer host mounts successfully
+- [x] `@mlightcad/cad-simple-viewer` initializes
+- [x] `@mlightcad/cad-simple-ui-plugin` toolbar renders
+- [x] Worker readiness check passes before file open
 
 ## File opening
 
-- [ ] Open a local `.dxf`
-- [ ] Open a local `.dwg`
+- [ ] Open a local `.dxf` - no CAD fixtures were available in this environment
+- [ ] Open a local `.dwg` - no CAD fixtures were available in this environment
 - [ ] Status changes to ready after a successful open
 - [ ] Error state appears when a file cannot be parsed
-- [ ] No file is uploaded to a server
+- [x] No file is uploaded to a server
 
 ## Workers and assets
 
-- [ ] `assets/dxf-parser-worker.js` is present in `dist/`
-- [ ] `assets/libredwg-parser-worker.js` is present in `dist/`
-- [ ] `assets/mtext-renderer-worker.js` is present in `dist/`
+- [x] `assets/dxf-parser-worker.js` is present in `dist/`
+- [x] `assets/libredwg-parser-worker.js` is present in `dist/`
+- [x] `assets/mtext-renderer-worker.js` is present in `dist/`
 - [ ] `assets/viewer-runtime.iife.js` is present in `dist/` only if the installed package exposes that runtime asset
-- [ ] Worker URLs resolve correctly in dev and build
+- [x] Worker URLs resolve correctly in dev and build
 
 ## UI checks
 
-- [ ] Title reads `CAD View`
-- [ ] Subtitle reads `Private DWG/DXF Browser Viewer`
-- [ ] Note about local-only files is visible
-- [ ] Viewer area is visible and usable
-- [ ] Layout remains readable on a narrow viewport
+- [x] Title reads `CAD View`
+- [x] Subtitle reads `Private DWG/DXF Browser Viewer`
+- [x] Note about local-only files is visible
+- [x] Viewer area is visible and usable
+- [x] Layout remains readable on a narrow viewport
