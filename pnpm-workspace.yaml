@@ -14,6 +14,7 @@ overrides:
   '@mlightcad/mtext-input-box': '^0.2.20'
   '@mlightcad/mtext-renderer': '^0.11.9'
   '@mlightcad/ribbon': '^0.1.10'
+  '@babel/core': '7.29.6'
   '@babel/plugin-transform-modules-systemjs': '7.29.4'
   axios: '1.16.0'
   brace-expansion: '5.0.6'
