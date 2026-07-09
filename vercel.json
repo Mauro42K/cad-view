@@ -1,0 +1,4 @@
+{
+  "buildCommand": "pnpm build",
+  "outputDirectory": "packages/cad-viewer-example/dist"
+}

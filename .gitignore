@@ -13,3 +13,4 @@ tmp/
 .vercel/
 local-test-files/
 *.log
+.vercel
