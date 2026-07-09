@@ -23,3 +23,9 @@ The visible app is the official full viewer example in `packages/cad-viewer-exam
 ## Local files
 
 Local DWG files belong in `local-test-files/` and are ignored by Git. Do not put DWG files in `public/`.
+
+## Dependabot
+
+Dependabot checks for dependency updates weekly and opens pull requests automatically.
+There is no auto-merge.
+Each PR should be reviewed with a build and a DWG test before merging.
