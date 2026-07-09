@@ -18,6 +18,7 @@ export default defineConfig({
         index: resolve(__dirname, 'src/index.ts'),
         register: resolve(__dirname, 'src/register.ts')
       },
+      cssFileName: 'style',
       name: packageId,
       fileName: (format, entryName) =>
         createLibEntryFileName(packageId, format, entryName)

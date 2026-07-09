@@ -43,6 +43,10 @@ export default defineConfig(({ command, mode }) => {
     existsSync(LOCAL_DATA_MODEL_ENTRY)
   if (command === 'serve') {
     aliases.push({
+      find: '@mlightcad/cad-agent-plugin/style.css',
+      replacement: resolve(__dirname, '../cad-agent-plugin/dist/style.css')
+    })
+    aliases.push({
       find: /^@mlightcad\/(cad-svg-plugin|three-renderer|cad-simple-viewer|cad-viewer)$/,
       replacement: resolve(__dirname, '../$1/src')
     })
