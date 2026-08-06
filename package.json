@@ -22,7 +22,8 @@
     "lint": "nx run-many -t lint",
     "lint:fix": "nx run-many -t lint:fix",
     "preview": "nx run @mlightcad/cad-viewer-example:preview",
-    "test": "jest"
+    "test": "jest",
+    "typecheck": "node scripts/typecheck.mjs"
   },
   "engines": {
     "node": ">=24",

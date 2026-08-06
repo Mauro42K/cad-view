@@ -5,3 +5,16 @@ updates:
     target-branch: "main"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 8
+    labels:
+      - "dependencies"
+      - "javascript"
+      - "dependabot"
+    groups:
+      development-patch-minor:
+        dependency-type: "development"
+        update-types:
+          - "patch"
+          - "minor"
+        exclude-patterns:
+          - "pdfjs-dist"

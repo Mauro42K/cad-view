@@ -1,0 +1,103 @@
+name: Dependabot selective auto-merge
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+
+jobs:
+  enable:
+    name: enable safe auto-merge
+    if: vars.ENABLE_DEPENDABOT_AUTOMERGE == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate Dependabot pull request
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const number = context.payload.pull_request.number;
+            const { owner, repo } = context.repo;
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: number });
+            const labels = new Set(pr.labels.map((label) => label.name));
+            const blockedLabels = ['manual-review', 'do-not-merge'];
+            const allowedAuthors = ['dependabot[bot]', 'app/dependabot'];
+            const body = pr.body || '';
+            const title = pr.title || '';
+            const dependencyMatch = body.match(/dependency-name:\s*([^\n]+)/);
+            const updateTypeMatch = body.match(/update-type:\s*version-update:semver-(patch|minor|major)/);
+            const dependency = dependencyMatch?.[1]?.trim();
+            const updateType = updateTypeMatch?.[1];
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner, repo, pull_number: number, per_page: 100,
+            });
+            const allowedFile = (path) => path === 'pnpm-lock.yaml' ||
+              path === 'package.json' || /^packages\/[^/]+\/package\.json$/.test(path);
+            const changedOnlyDependencies = files.length > 0 && files.every((file) => {
+              if (!allowedFile(file.filename)) return false;
+              if (!file.filename.endsWith('package.json')) return true;
+              const changedLines = (file.patch || '').split('\n')
+                .filter((line) => /^[+-][^+-]/.test(line));
+              return changedLines.length > 0 && changedLines.every((line) =>
+                line.includes(`"${dependency}"`) || line.trim() === '+' || line.trim() === '-');
+            });
+            const manifestFiles = files.filter((file) => file.filename.endsWith('package.json'));
+            const manifests = [];
+            for (const file of manifestFiles) {
+              try {
+                const { data: manifestFile } = await github.rest.repos.getContent({
+                  owner, repo, path: file.filename, ref: pr.base.sha,
+                });
+                if (Array.isArray(manifestFile) || !manifestFile.content) return;
+                manifests.push(JSON.parse(Buffer.from(manifestFile.content, 'base64').toString('utf8')));
+              } catch (error) {
+                core.warning(`Could not classify ${file.filename}: ${error.message}`);
+                return;
+              }
+            }
+            const hasDevelopmentDeclaration = manifests.some((manifest) =>
+              Object.prototype.hasOwnProperty.call(manifest.devDependencies || {}, dependency));
+            const hasProductionDeclaration = manifests.some((manifest) =>
+              ['dependencies', 'optionalDependencies', 'peerDependencies'].some((field) =>
+                Object.prototype.hasOwnProperty.call(manifest[field] || {}, dependency)));
+            const dependencyIsDevelopmentOnly = manifestFiles.length > 0 &&
+              hasDevelopmentDeclaration && !hasProductionDeclaration;
+            const checks = await github.paginate(github.rest.checks.listForRef, {
+              owner, repo, ref: pr.head.sha, per_page: 100,
+            });
+            const requiredChecks = ['lint', 'typecheck', 'test', 'build'];
+            const checksPassed = requiredChecks.every((name) =>
+              checks.some((check) => check.name === name && check.status === 'completed' && check.conclusion === 'success'));
+            const eligible = allowedAuthors.includes(pr.user.login) &&
+              pr.state === 'open' && !pr.draft &&
+              dependency && dependency !== 'pdfjs-dist' &&
+              updateType && updateType !== 'major' &&
+              dependencyIsDevelopmentOnly &&
+              !blockedLabels.some((label) => labels.has(label)) &&
+              pr.mergeable_state === 'clean' &&
+              changedOnlyDependencies && checksPassed;
+
+            core.info(JSON.stringify({ number, title, dependency, updateType,
+              author: pr.user.login, changedOnlyDependencies,
+              dependencyIsDevelopmentOnly, checksPassed,
+              mergeable: pr.mergeable_state, eligible }));
+            if (!eligible) return;
+
+            const existingLabels = await github.paginate(github.rest.issues.listLabelsOnIssue, {
+              owner, repo, issue_number: number, per_page: 100,
+            });
+            if (existingLabels.some((label) => label.name === 'automerge-candidate') &&
+                !labels.has('automerge-candidate')) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number: number, labels: ['automerge-candidate'] });
+            }
+            await github.graphql(`
+              mutation($id: ID!) {
+                enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: SQUASH }) {
+                  pullRequest { autoMergeRequest { enabledAt } }
+                }
+              }`, { id: pr.node_id });
