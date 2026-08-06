@@ -40,7 +40,9 @@ const config: Config = {
     '^three/examples/jsm/utils/BufferGeometryUtils\\.js$':
       '<rootDir>/test/mocks/three/BufferGeometryUtils.js',
     '^three/examples/jsm/controls/OrbitControls(\\.js)?$':
-      '<rootDir>/test/mocks/three/OrbitControls.js'
+      '<rootDir>/test/mocks/three/OrbitControls.js',
+    '^pdfjs-dist/build/pdf\\.worker\\.mjs\\?url$':
+      '<rootDir>/test/mocks/pdfjs-worker-url.js'
   }
 }
 

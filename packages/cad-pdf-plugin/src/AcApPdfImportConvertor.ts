@@ -7,9 +7,12 @@ import {
   log
 } from '@mlightcad/data-model'
 import * as pdfjsLib from 'pdfjs-dist'
+import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url'
 import type { PDFOperatorList } from 'pdfjs-dist/types/src/display/api'
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = ''
+// PDF.js 6 ships an ESM worker. Vite resolves this URL into the emitted
+// worker asset, preventing the importer from falling back to the main thread.
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl
 
 /** 1 PDF point in mm (1 pt = 1/72 inch = 25.4/72 mm) */
 const PT_TO_MM = 25.4 / 72
@@ -56,6 +59,9 @@ export class AcApPdfImportConvertor {
    */
   async convert(context: AcApContext, data: ArrayBuffer, pageNumber = 1) {
     try {
+      // CAD View only consumes page operator lists. It does not create an
+      // AnnotationLayer or call getAnnotations, so embedded PDF JavaScript is
+      // never handed to a browser execution surface.
       const pdf = await pdfjsLib.getDocument({ data }).promise
       const page = await pdf.getPage(pageNumber)
       const viewport = page.getViewport({ scale: 1 })
