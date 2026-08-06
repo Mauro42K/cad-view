@@ -50,7 +50,7 @@
     "@mlightcad/data-model": "^1.10.3",
     "@mlightcad/three-renderer": "workspace:*",
     "@types/jest": "^29.5.12",
-    "@types/rbush": "^3.0.4",
+    "@types/rbush": "^4.0.0",
     "@types/three": "^0.172.0",
     "fflate": "^0.8.2",
     "rbush": "^4.0.1",
