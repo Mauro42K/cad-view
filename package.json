@@ -23,6 +23,7 @@
     "lint:fix": "nx run-many -t lint:fix",
     "preview": "nx run @mlightcad/cad-viewer-example:preview",
     "test": "jest",
+    "test:ci": "nx run @mlightcad/cad-viewer:build && pnpm test --runInBand",
     "typecheck": "node scripts/typecheck.mjs"
   },
   "engines": {

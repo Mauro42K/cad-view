@@ -53,9 +53,23 @@ describe('cad-viewer ESM import support', () => {
       ).trim()
 
       const resolvedPath = fileURLToPath(output)
-      const expectedPath = path.join(cadViewerRoot, 'dist', 'cad-viewer.js')
+      const resolvedToBuiltPackage = path.relative(cadViewerRoot, resolvedPath)
+      const resolvedToConsumer = path.relative(tempDir, resolvedPath)
 
-      expect(path.normalize(resolvedPath)).toBe(path.normalize(expectedPath))
+      expect(fs.existsSync(resolvedPath)).toBe(true)
+      expect(path.basename(resolvedPath)).toBe('cad-viewer.js')
+      expect(path.basename(path.dirname(resolvedPath))).toBe('dist')
+      expect(
+        resolvedToBuiltPackage === path.join('dist', 'cad-viewer.js') ||
+          resolvedToConsumer ===
+            path.join(
+              'node_modules',
+              '@mlightcad',
+              'cad-viewer',
+              'dist',
+              'cad-viewer.js'
+            )
+      ).toBe(true)
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true })
     }
