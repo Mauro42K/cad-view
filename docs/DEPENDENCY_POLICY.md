@@ -116,9 +116,17 @@ transitive dependency set `axios` `1.16.0` to `1.18.0`, `postcss` `8.5.10` to
 `8.5.23`, `immutable` `5.1.5` to `5.1.8`, `brace-expansion` `5.0.6` to
 `5.0.9`, `fast-uri` `3.1.2` to `3.1.5`, `svgo` `3.3.3` to `3.3.4`,
 `linkify-it` `5.0.1` to `5.0.2`, and `dompurify` `3.4.11` to `3.4.12`.
-There are now 6 Dependabot alerts open. The remaining alerts concern
-`@ai-sdk/provider-utils`, `js-yaml`, and Nx; they remain outside S1 and are
-reserved for later dedicated triage or migration work.
+The three `js-yaml` alerts were subsequently remediated in merge
+`8d0dcb3d456a28ee03ebac6bc07b0cbcc13a5246`, updating the explicit overrides
+`js-yaml@3` from `3.15.0` to `3.15.1` and `js-yaml@4` from `4.2.0` to
+`4.3.1`. Dependabot alerts #96, #95, and #85 are fixed. The change remained
+limited to tooling/dev dependency resolution; no runtime code was changed.
+
+There are now 3 Dependabot alerts open. The remaining alerts are Nx (#87 and
+#88), which remains an S2B dedicated tooling migration, and
+`@ai-sdk/provider-utils` (#51), which remains an S3 temporary acceptance while
+no patched version is available. No further S1 work should include Nx or the
+AI SDK.
 
 ## Future GitHub setup
 
