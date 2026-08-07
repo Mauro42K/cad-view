@@ -12,7 +12,22 @@ ignored by this policy.
 is used by the PDF plugin and can directly affect viewer behavior, rendering,
 and compatibility, so even a technically green PR needs targeted review.
 
-## Selective auto-merge
+## Current GitHub merge controls
+
+This repository is private on GitHub Free. `main` is not currently protected:
+branch protection rules and rulesets for private repositories require a higher
+GitHub plan. Therefore:
+
+- Dependabot auto-merge is not used while `main` cannot be protected.
+- `ENABLE_DEPENDABOT_AUTOMERGE` must remain absent or disabled.
+- Dependency pull requests are reviewed and merged manually.
+- No policy document should treat `main` as protected in the current state.
+
+The repository may revisit branch protection and selective auto-merge if the
+GitHub plan changes and required checks/reviews can be enforced. Until then,
+the workflow below is retained only as a future mechanism and is not enabled.
+
+## Selective auto-merge (future option)
 
 The auto-merge workflow only enables GitHub auto-merge when all of these are
 true: the PR is authored by Dependabot, the Dependabot metadata says patch or
@@ -22,7 +37,8 @@ and `pnpm-lock.yaml` changed, the merge state is clean, and `lint`,
 `typecheck`, `test`, and `build` all pass. `manual-review` and `do-not-merge`
 always block it. Missing or ambiguous Dependabot metadata, manifest data, file
 patches, checks, or merge state makes the PR ineligible. No merge is forced;
-GitHub branch protection and required reviews still apply.
+GitHub branch protection and required reviews would still apply if this future
+option became available.
 
 The workflow is intentionally disabled until the repository variable
 `ENABLE_DEPENDABOT_AUTOMERGE` is explicitly set to `true`. This prevents a
@@ -54,15 +70,58 @@ Dependabot updates dependencies only; it does not synchronize source code or
 history from `mlightcad/cad-viewer` (or another upstream). Upstream sync must
 be a separate, deliberate review with an explicit source, diff, and validation.
 
-## Required GitHub setup
+## PDF.js S0 remediation
 
-Keep `main` protected and require the `lint`, `typecheck`, `test`, and `build`
-checks before merging. Enable “Allow auto-merge” at repository level if the
-selective workflow should be allowed to queue a squash merge, and set
-`ENABLE_DEPENDABOT_AUTOMERGE=true` only after an explicit policy decision. Do not grant
-Dependabot or workflows blanket bypass permissions, and do not add secrets to
-these workflows. The current checkout has `test/mocks/three` fixtures restored
-from upstream, and `jest.config.ts` maps to them. The
-agent plugin also has no bounded standalone typecheck target; its existing
-build remains covered by the build gate, while `typecheck` runs the available
+`pdfjs-dist` remains excluded from automatic update groups and requires a
+focused pull request, full validation, and a PDF smoke test. The migration from
+`5.7.284` to `6.2.108` was completed as the S0 security remediation in merge
+`be0b01f8d7a53cadeb7d6b05ca7ae308022487e0`.
+
+The remediation addressed `GHSA-hq66-cqwq-w95j` / `CVE-2026-16633`, and
+Dependabot alerts #94 and #97 are fixed. The PDF plugin uses PDF.js to obtain
+operator lists for CAD geometry extraction; it does not create an
+`AnnotationLayer` or call `getAnnotations`. Embedded PDF JavaScript is
+therefore not handed to a browser execution surface by this code path.
+
+PDF.js 6's worker is resolved as an ESM asset through Vite's `?url` handling.
+Future `pdfjs-dist` updates still require focused API/worker review and a PDF
+smoke test.
+
+## Coupled MLightCAD dependencies
+
+Packages in the MLightCAD family that are tightly coupled must be validated as
+a set. Version labels such as patch or minor do not establish compatibility.
+
+The failed PR #15 demonstrated that
+`@mlightcad/dxf-json-converter@1.12.0` is not compatible with
+`@mlightcad/data-model@1.10.3` in this workspace. When Dependabot groups
+MLightCAD packages, the complete build is mandatory before merge. If the
+versions are incompatible, separate the group and resolve the compatibility
+as a dedicated migration; do not patch functional code merely to accommodate
+an incompatible dependency set.
+
+## Security dependency workflow
+
+Security dependency work is phase-governed:
+
+- **S0:** high-severity runtime vulnerabilities with confirmed exposure.
+- **S1:** controlled batches of low-risk patch/minor security updates.
+- **S2:** major upgrades and dedicated migrations.
+- **S3:** documented temporary acceptances when no patch exists or exposure is
+  low.
+
+S0 is complete for PDF.js. There are 30 Dependabot alerts open after S0. The
+next planned dependency-security work is S1.
+
+## Future GitHub setup
+
+If the GitHub plan changes, protect `main` and require the `lint`, `typecheck`,
+`test`, and `build` checks before merging. Only then may the repository consider
+enabling “Allow auto-merge” and setting
+`ENABLE_DEPENDABOT_AUTOMERGE=true` after an explicit policy decision. Do not
+grant Dependabot or workflows blanket bypass permissions, and do not add
+secrets to these workflows. The current checkout has `test/mocks/three`
+fixtures restored from upstream, and `jest.config.ts` maps to them. The agent
+plugin also has no bounded standalone typecheck target; its existing build
+remains covered by the build gate, while `typecheck` runs the available
 `tsc`/`vue-tsc` checks for the other workspaces.
