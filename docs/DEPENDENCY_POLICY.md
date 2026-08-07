@@ -127,7 +127,11 @@ Nx S2B is complete in merge
 from `20.0.4` to `22.7.2` using the official Nx migration flow. The migration
 required only the Nx manifests, lockfile, and the official generated ignore
 entries; no functional code or workflow changes were needed. Dependabot
-alerts #87 and #88 are fixed. One alert remains open:
+alerts #87 and #88 are fixed. Dependabot subsequently opened #98 and #100 for
+the distinct Nx advisory `GHSA-vp3h-ghgh-jr7g` / `CVE-2026-71476`, fixed in
+`22.7.7`, and #99 for `yaml` `GHSA-48c2-rrv3-qjmp` / `CVE-2026-33532`, fixed
+in `2.8.3`. Those later alerts are outside this completed migration and
+require follow-up triage. Four alerts are currently open: #98, #99, #100, and
 `@ai-sdk/provider-utils` (#51), which remains an S3 temporary acceptance while
 no patched version is available. No further S1 work should include Nx or the
 AI SDK.
