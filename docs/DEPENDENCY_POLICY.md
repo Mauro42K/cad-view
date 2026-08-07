@@ -122,8 +122,12 @@ The three `js-yaml` alerts were subsequently remediated in merge
 `4.3.1`. Dependabot alerts #96, #95, and #85 are fixed. The change remained
 limited to tooling/dev dependency resolution; no runtime code was changed.
 
-There are now 3 Dependabot alerts open. The remaining alerts are Nx (#87 and
-#88), which remains an S2B dedicated tooling migration, and
+Nx S2B is complete in merge
+`bc17a5a73b083f42163813fce8e5da923a8ac8a3`: `nx` and `@nx/js` were migrated
+from `20.0.4` to `22.7.2` using the official Nx migration flow. The migration
+required only the Nx manifests, lockfile, and the official generated ignore
+entries; no functional code or workflow changes were needed. Dependabot
+alerts #87 and #88 are fixed. One alert remains open:
 `@ai-sdk/provider-utils` (#51), which remains an S3 temporary acceptance while
 no patched version is available. No further S1 work should include Nx or the
 AI SDK.
