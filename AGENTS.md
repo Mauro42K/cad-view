@@ -1,18 +1,18 @@
-# CAD View — instrucciones del repositorio
+# CAD View — adaptación local de Mauro Engineering Standard v1.0.2
 
-Estas instrucciones adaptan [Mauro Engineering Standard v1.0.1](https://github.com/Mauro42K/engineering-standard/blob/v1.0.1/STANDARD.md) a este repositorio. El estándar canónico define el proceso común; este archivo conserva únicamente el contexto y las reglas específicas de CAD View.
+Este archivo adapta [Mauro Engineering Standard v1.0.2](https://github.com/Mauro42K/engineering-standard/blob/v1.0.2/STANDARD.md) a este repositorio. El estándar canónico define el proceso común; aquí sólo se mantienen el contexto, los comandos, los riesgos y las reglas operativas específicas de CAD View.
 
 ## Contexto y límites
 
-- CAD View es una copia independiente basada en [`mlightcad/cad-viewer`](https://github.com/mlightcad/cad-viewer); no existe sincronización automática con upstream.
-- Una sincronización upstream es una tarea separada y deliberada, con fuente explícita, diff y validación propios. Dependabot solo actualiza dependencias.
+- CAD View es una copia independiente basada en [`mlightcad/cad-viewer`](https://github.com/mlightcad/cad-viewer); no existe sincronización automática con upstream. Una sincronización upstream es una tarea separada y deliberada, con fuente explícita, diff y validación propios.
+- Dependabot sólo actualiza dependencias; no sincroniza código ni historial con upstream.
 - La aplicación visible vive en `packages/cad-viewer-example`.
-- Requiere Node.js 24+ y pnpm 10+.
+- El workspace requiere Node.js 24+ y pnpm 10+; el gestor fijado es pnpm `10.33.4`.
 - Los DWG locales pertenecen en `local-test-files/`, que está ignorado por Git. Nunca deben colocarse en `public/` ni confirmarse en Git.
 
-## Comandos y validación
+## Comandos y gates reales
 
-Usa los comandos reales del workspace:
+Checks locales del workspace:
 
 ```sh
 pnpm lint
@@ -21,20 +21,27 @@ pnpm test
 pnpm build
 ```
 
-Para reproducir CI cuando corresponda, usa `pnpm typecheck:ci` y `pnpm test:ci`; el workflow también ejecuta `pnpm lint` y `pnpm build` tras `pnpm install --frozen-lockfile`. No inventes scripts ni checks. Para cambios en la aplicación visible, considera además la validación E2E existente de `packages/cad-viewer-example` cuando el alcance y el entorno lo permitan.
+Para reproducir los gates de CI, usar `pnpm install --frozen-lockfile` y:
 
-Antes de presentar cambios, revisa el diff completo, ejecuta `git diff --check` y haz una segunda pasada breve de coherencia documental y alcance. Para cambios documentales, la segunda pasada debe releer el documento completo afectado y buscar explícitamente afirmaciones obsoletas, duplicadas o contradictorias con el nuevo estado antes de declarar PASS. Limita los ciclos correctivos a un máximo de dos por tarea, salvo autorización humana expresa para continuar. Las afirmaciones de éxito requieren comandos ejecutados y evidencia de su resultado.
+```sh
+pnpm typecheck:ci
+pnpm test:ci
+pnpm lint
+pnpm build
+```
 
-## Dependencias y deuda existente
+Los cambios que afecten la aplicación visible pueden requerir además el E2E existente:
 
-- La política Dependabot vigente es manual: no hay auto-merge activo. No habilites `ENABLE_DEPENDABOT_AUTOMERGE` ni interpretes el workflow futuro como autorización.
-- `pdfjs-dist` requiere revisión dedicada, revisión de API/worker y smoke test con PDF representativo.
-- Las dependencias MLightCAD acopladas deben validarse como conjunto. No modifiques código funcional únicamente para acomodar un conjunto de dependencias incompatible.
-- Preserva las fases S0–S3, las alertas y la deuda existentes según `docs/DEPENDENCY_POLICY.md`; no las reinterpretes como resueltas ni cierres remediation sin evidencia actual y alcance autorizado.
+```sh
+pnpm --filter @mlightcad/cad-viewer-example test:e2e
+```
 
-## Forma de trabajo
+## Dependencias, seguridad y deuda
 
-- Para trabajo técnico no trivial que involucre arquitectura, impacto, varios módulos, símbolos compartidos o flujos entre superficies, usa Codebase Intelligence cuando esté disponible; confirma sus resultados leyendo directamente archivos, configuración, tests y diff. Declara `USED`, `NOT APPLICABLE`, `UNAVAILABLE` o `STALE / REINDEXED` según corresponda.
-- Mantén un solo agente principal. Los subagentes internos, si se necesitan, permanecen dentro del mismo hilo y se limitan a análisis, validaciones o revisiones acotadas; el agente principal integra y verifica el resultado.
-- Ajusta la revisión al riesgo y a la superficie afectada. La Definition of Done incluye alcance explícito, diff revisado, documentación coherente, checks pertinentes ejecutados y evidencia reportable.
-- Detente al alcanzar `PASS` o `PASS WITH NOTES`, al llegar al límite de ciclos, o ante un bloqueo que requiera decisión humana o evidencia inaccesible. No amplíes el alcance ni conviertas deuda, alertas o gaps de validación en éxito por conveniencia.
+- La política Dependabot vigente es manual: el repositorio es privado, `main` no está protegido y `ENABLE_DEPENDABOT_AUTOMERGE` debe permanecer ausente o deshabilitado. El workflow de auto-merge es sólo un mecanismo futuro condicionado por esa variable; no constituye autorización para habilitarlo.
+- `pdfjs-dist` requiere una revisión dedicada de API/worker y smoke test con un PDF representativo. Deben preservarse las fases S0–S3, las alertas y la deuda de `docs/DEPENDENCY_POLICY.md`; no se debe declarar remediation cerrada sin evidencia actual.
+- Las dependencias MLightCAD acopladas deben validarse como conjunto. No se debe modificar código funcional únicamente para acomodar un conjunto de dependencias incompatible.
+
+## Deploy y operación
+
+- El deploy configurado en `vercel.json` usa `pnpm build` y publica `packages/cad-viewer-example/dist`.
