@@ -110,8 +110,15 @@ Security dependency work is phase-governed:
 - **S3:** documented temporary acceptances when no patch exists or exposure is
   low.
 
-S0 is complete for PDF.js. There are 30 Dependabot alerts open after S0. The
-next planned dependency-security work is S1.
+S0 is complete for PDF.js. S1 was completed as merge
+`daa7e40d2387aa628503008a18429307224e552c`, updating the controlled
+transitive dependency set `axios` `1.16.0` to `1.18.0`, `postcss` `8.5.10` to
+`8.5.23`, `immutable` `5.1.5` to `5.1.8`, `brace-expansion` `5.0.6` to
+`5.0.9`, `fast-uri` `3.1.2` to `3.1.5`, `svgo` `3.3.3` to `3.3.4`,
+`linkify-it` `5.0.1` to `5.0.2`, and `dompurify` `3.4.11` to `3.4.12`.
+There are now 6 Dependabot alerts open. The remaining alerts concern
+`@ai-sdk/provider-utils`, `js-yaml`, and Nx; they remain outside S1 and are
+reserved for later dedicated triage or migration work.
 
 ## Future GitHub setup
 
