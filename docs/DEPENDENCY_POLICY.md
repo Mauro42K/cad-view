@@ -100,6 +100,26 @@ versions are incompatible, separate the group and resolve the compatibility
 as a dedicated migration; do not patch functional code merely to accommodate
 an incompatible dependency set.
 
+PR #15 was closed as obsolete/deferred after review. It mixed independent
+tooling with the coupled MLightCAD family and was based on an older main
+revision. The tooling-only replacement was merged as PR #26 in merge
+`aa9a2f77265610b44c020ef8a0752cf26b0ccbaa`.
+
+The MLightCAD set from #15 remains deferred. Published package metadata shows
+that `@mlightcad/dxf-json-converter@1.12.0` and
+`@mlightcad/libredwg-converter@3.12.0` require the exact
+`@mlightcad/data-model@1.12.0` peer train, while the current upstream uses
+`@mlightcad/data-model@1.12.3` and `@mlightcad/libredwg-converter@3.12.3`
+with the built-in `AcDbNativeDxfConverter` rather than the deprecated
+`dxf-json-converter`. Adopting that direction requires a focused API and
+converter-path migration; it must not be introduced as a generic Dependabot
+group or by changing viewer code solely to make versions compile.
+
+Independent development updates from #15 were reviewed and merged separately
+in #26: Changesets CLI, TypeScript-ESLint, Prettier, ts-jest, TypeDoc, fflate,
+Sass, vue-eslint-parser, and Playwright. Future Dependabot groups must exclude
+the MLightCAD family from generic tooling groups.
+
 ## Security dependency workflow
 
 Security dependency work is phase-governed:
