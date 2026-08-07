@@ -23,7 +23,7 @@ pnpm build
 
 Para reproducir CI cuando corresponda, usa `pnpm typecheck:ci` y `pnpm test:ci`; el workflow también ejecuta `pnpm lint` y `pnpm build` tras `pnpm install --frozen-lockfile`. No inventes scripts ni checks. Para cambios en la aplicación visible, considera además la validación E2E existente de `packages/cad-viewer-example` cuando el alcance y el entorno lo permitan.
 
-Antes de presentar cambios, revisa el diff completo, ejecuta `git diff --check` y haz una segunda pasada breve de coherencia documental y alcance. Las afirmaciones de éxito requieren comandos ejecutados y evidencia de su resultado.
+Antes de presentar cambios, revisa el diff completo, ejecuta `git diff --check` y haz una segunda pasada breve de coherencia documental y alcance. Para cambios documentales, la segunda pasada debe releer el documento completo afectado y buscar explícitamente afirmaciones obsoletas, duplicadas o contradictorias con el nuevo estado antes de declarar PASS. Limita los ciclos correctivos a un máximo de dos por tarea, salvo autorización humana expresa para continuar. Las afirmaciones de éxito requieren comandos ejecutados y evidencia de su resultado.
 
 ## Dependencias y deuda existente
 

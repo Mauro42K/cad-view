@@ -59,9 +59,10 @@ are manual by policy; the latter is ESM-only and requires Node 22+, although
 this repository currently targets Node 24. `ts-jest` must remain compatible
 with Jest 30, TypeScript, and Node 24.
 
-`@changesets/cli` is currently declared but no `.changeset` configuration or
-usage was found, so its update is best deferred until the release workflow
-needs it.
+`@changesets/cli` is currently declared, but no `.changeset` configuration or
+active release workflow usage was found. It was nevertheless reviewed and
+updated as an independent tooling dependency in PR #26; it is not currently
+deferred, and this policy does not imply that a release workflow exists.
 
 ## Upstream synchronization
 
