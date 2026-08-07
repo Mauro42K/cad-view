@@ -122,19 +122,20 @@ The three `js-yaml` alerts were subsequently remediated in merge
 `4.3.1`. Dependabot alerts #96, #95, and #85 are fixed. The change remained
 limited to tooling/dev dependency resolution; no runtime code was changed.
 
-Nx S2B is complete in merge
-`bc17a5a73b083f42163813fce8e5da923a8ac8a3`: `nx` and `@nx/js` were migrated
-from `20.0.4` to `22.7.2` using the official Nx migration flow. The migration
-required only the Nx manifests, lockfile, and the official generated ignore
-entries; no functional code or workflow changes were needed. Dependabot
-alerts #87 and #88 are fixed. Dependabot subsequently opened #98 and #100 for
-the distinct Nx advisory `GHSA-vp3h-ghgh-jr7g` / `CVE-2026-71476`, fixed in
-`22.7.7`, and #99 for `yaml` `GHSA-48c2-rrv3-qjmp` / `CVE-2026-33532`, fixed
-in `2.8.3`. Those later alerts are outside this completed migration and
-require follow-up triage. Four alerts are currently open: #98, #99, #100, and
-`@ai-sdk/provider-utils` (#51), which remains an S3 temporary acceptance while
-no patched version is available. No further S1 work should include Nx or the
-AI SDK.
+Nx S2B was completed in two focused merges. Merge
+`bc17a5a73b083f42163813fce8e5da923a8ac8a3` migrated `nx` and `@nx/js` from
+`20.0.4` to `22.7.2` using the official Nx migration flow; merge
+`868254cdfd6d0f945de83b7911d6990d0b28e356` applied the follow-up patch from
+`22.7.2` to `22.7.7`. The changes required only the Nx manifests and lockfile;
+no functional code or workflow changes were needed. Dependabot alerts #87,
+#88, #98, and #100 are fixed. The same follow-up removed vulnerable transitive
+`yaml@2.8.0` from the Nx dependency path; Nx now resolves `yaml@2.9.0`, above
+the fixed `2.8.3` release. Dependabot alert #99 is fixed.
+
+One alert remains open: `@ai-sdk/provider-utils` (#51), which remains an S3
+temporary acceptance while no patched version is available. No immediate
+security remediations are currently known outside the AI SDK alert. No further
+S1 work should include Nx or the AI SDK.
 
 ## Future GitHub setup
 
