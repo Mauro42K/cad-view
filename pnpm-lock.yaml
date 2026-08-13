@@ -124,8 +124,8 @@ importers:
         specifier: ^6.4.3
         version: 6.4.3(@types/node@24.12.4)(sass@1.102.0)(yaml@2.9.0)
       vite-plugin-static-copy:
-        specifier: ^3.1.1
-        version: 3.4.0(vite@6.4.3(@types/node@24.12.4)(sass@1.102.0)(yaml@2.9.0))
+        specifier: ^4.1.1
+        version: 4.1.1(vite@6.4.3(@types/node@24.12.4)(sass@1.102.0)(yaml@2.9.0))
 
   packages/cad-agent-plugin:
     dependencies:
@@ -396,8 +396,8 @@ importers:
         specifier: ^6.4.3
         version: 6.4.3(@types/node@24.12.4)(sass@1.102.0)(yaml@2.9.0)
       vite-plugin-static-copy:
-        specifier: ^3.1.1
-        version: 3.4.0(vite@6.4.3(@types/node@24.12.4)(sass@1.102.0)(yaml@2.9.0))
+        specifier: ^4.1.1
+        version: 4.1.1(vite@6.4.3(@types/node@24.12.4)(sass@1.102.0)(yaml@2.9.0))
       vite-svg-loader:
         specifier: ^5.1.0
         version: 5.1.1(vue@3.5.41(typescript@5.9.3))
@@ -4301,8 +4301,8 @@ packages:
     resolution: {integrity: sha512-y3b8Kpd8OAN444hxfBbFfj1FY/RjtTd8tzYwhUqNYXx0fXx2iX4maP4Qr6qhIKbQXI02wTLAda4fYUbDagTUFw==}
     engines: {node: '>=6'}
 
-  p-map@7.0.4:
-    resolution: {integrity: sha512-tkAQEw8ysMzmkhgw8k+1U/iPhWNhykKnSk4Rd5zLoPJCuJaGRPo6YposrZgaxHKzDHdDWWZvE/Sk7hsL2X/CpQ==}
+  p-map@7.0.6:
+    resolution: {integrity: sha512-I4Prw6ivkd6p8PiYR1tXASOAOBzIJwu0TB7fqaX0c/8c3QAehNYmX57EijyGGGBt3c/BIowGwV03RVBtXvHEVg==}
     engines: {node: '>=18'}
 
   p-try@2.2.0:
@@ -4374,6 +4374,10 @@ packages:
 
   picomatch@4.0.4:
     resolution: {integrity: sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==}
+    engines: {node: '>=12'}
+
+  picomatch@4.0.5:
+    resolution: {integrity: sha512-RvwwcruNjI1ncT5xRakeyS9Lf8lcItv34KD+aif+VH9kduAyfYBipGh12274xtenIPZ119/R9BdTBa8gAwSh0A==}
     engines: {node: '>=12'}
 
   pidtree@0.6.0:
@@ -4821,6 +4825,10 @@ packages:
     resolution: {integrity: sha512-j2Zq4NyQYG5XMST4cbs02Ak8iJUdxRM0XI5QyxXuZOzKOINmWurp3smXu3y5wDcJrptwpSjgXHzIQxR0omXljQ==}
     engines: {node: '>=12.0.0'}
 
+  tinyglobby@0.2.17:
+    resolution: {integrity: sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==}
+    engines: {node: '>=12.0.0'}
+
   tldts-core@6.1.86:
     resolution: {integrity: sha512-Je6p7pkk+KMzMv2XXKmAE3McmolOQFdxkKw0R8EYNr7sELW46JqnNeTX8ybPiQgvg1ymCoF8LXs5fzFaZvJPTA==}
 
@@ -5025,11 +5033,11 @@ packages:
     peerDependencies:
       vite: '*'
 
-  vite-plugin-static-copy@3.4.0:
-    resolution: {integrity: sha512-ekryzCw0ouAOE8tw4RvVL/dfqguXzumsV3FBKoKso4MQ1MUUrUXtl5RI4KpJQUNGqFEsg9kxl4EvDl02YtA9VQ==}
-    engines: {node: ^18.0.0 || >=20.0.0}
+  vite-plugin-static-copy@4.1.1:
+    resolution: {integrity: sha512-GrlA8YklrAfSyxJ4M3fdQLOo9oNkp56IM9FYgX/WtEgeIFkPwhu4wzpufBCIuNKCa6Fn77FkRdYxkHqV0FwjAw==}
+    engines: {node: ^22.0.0 || >=24.0.0}
     peerDependencies:
-      vite: ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0
+      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
 
   vite-svg-loader@5.1.1:
     resolution: {integrity: sha512-RPzcXA/EpKJA0585x58DBgs7my2VfeJ+j2j1EoHY4Zh82Y7hV4cR1fElgy2aZi85+QSrcLLoTStQ5uZjD68u+Q==}
@@ -7492,7 +7500,7 @@ snapshots:
       debug: 4.4.3(supports-color@7.2.0)
       minimatch: 9.0.7
       semver: 7.7.4
-      tinyglobby: 0.2.15
+      tinyglobby: 0.2.17
       ts-api-utils: 2.5.0(typescript@5.9.3)
       typescript: 5.9.3
     transitivePeerDependencies:
@@ -8607,6 +8615,10 @@ snapshots:
     optionalDependencies:
       picomatch: 4.0.4
 
+  fdir@6.5.0(picomatch@4.0.5):
+    optionalDependencies:
+      picomatch: 4.0.5
+
   fflate@0.8.3: {}
 
   figures@3.2.0:
@@ -9073,7 +9085,7 @@ snapshots:
       jest-regex-util: 30.4.0
       jest-util: 30.4.1
       jest-worker: 30.4.1
-      picomatch: 4.0.4
+      picomatch: 4.0.5
       walker: 1.0.8
     optionalDependencies:
       fsevents: 2.3.3
@@ -9117,7 +9129,7 @@ snapshots:
       chalk: 4.1.2
       graceful-fs: 4.2.11
       jest-util: 30.4.1
-      picomatch: 4.0.4
+      picomatch: 4.0.5
       pretty-format: 30.4.1
       slash: 3.0.0
       stack-utils: 2.0.6
@@ -9248,7 +9260,7 @@ snapshots:
       chalk: 4.1.2
       ci-info: 4.4.0
       graceful-fs: 4.2.11
-      picomatch: 4.0.4
+      picomatch: 4.0.5
 
   jest-validate@30.4.1:
     dependencies:
@@ -9791,7 +9803,7 @@ snapshots:
 
   p-map@2.1.0: {}
 
-  p-map@7.0.4: {}
+  p-map@7.0.6: {}
 
   p-try@2.2.0: {}
 
@@ -9849,6 +9861,8 @@ snapshots:
   picomatch@2.3.2: {}
 
   picomatch@4.0.4: {}
+
+  picomatch@4.0.5: {}
 
   pidtree@0.6.0: {}
 
@@ -10281,6 +10295,11 @@ snapshots:
       fdir: 6.5.0(picomatch@4.0.4)
       picomatch: 4.0.4
 
+  tinyglobby@0.2.17:
+    dependencies:
+      fdir: 6.5.0(picomatch@4.0.5)
+      picomatch: 4.0.5
+
   tldts-core@6.1.86: {}
 
   tldts@6.1.86:
@@ -10496,12 +10515,12 @@ snapshots:
       picocolors: 1.1.1
       vite: 6.4.3(@types/node@24.12.4)(sass@1.102.0)(yaml@2.9.0)
 
-  vite-plugin-static-copy@3.4.0(vite@6.4.3(@types/node@24.12.4)(sass@1.102.0)(yaml@2.9.0)):
+  vite-plugin-static-copy@4.1.1(vite@6.4.3(@types/node@24.12.4)(sass@1.102.0)(yaml@2.9.0)):
     dependencies:
       chokidar: 3.6.0
-      p-map: 7.0.4
+      p-map: 7.0.6
       picocolors: 1.1.1
-      tinyglobby: 0.2.15
+      tinyglobby: 0.2.17
       vite: 6.4.3(@types/node@24.12.4)(sass@1.102.0)(yaml@2.9.0)
 
   vite-svg-loader@5.1.1(vue@3.5.41(typescript@5.9.3)):
