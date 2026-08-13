@@ -55,7 +55,7 @@
     "@mlightcad/ui-components": "^0.1.6",
     "@element-plus/icons-vue": "^2.3.1",
     "@vueuse/core": "^11.1.0",
-    "@vitejs/plugin-vue": "^5.1.3",
+    "@vitejs/plugin-vue": "^6.0.8",
     "element-plus": "^2.12.0",
     "lodash-es": "4.18.1",
     "sass": "^1.102.0",
