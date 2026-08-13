@@ -219,22 +219,22 @@ importers:
         version: 1.10.3
       '@mlightcad/dxf-json-converter':
         specifier: ^1.10.3
-        version: 1.10.3(@mlightcad/data-model@1.10.3)
+        version: 1.12.0(@mlightcad/data-model@1.10.3)
       '@mlightcad/libredwg-converter':
         specifier: ^3.10.3
-        version: 3.10.3(@mlightcad/data-model@1.10.3)
+        version: 3.12.5(@mlightcad/data-model@1.10.3)
       '@mlightcad/mtext-input-box':
         specifier: ^0.2.20
-        version: 0.2.20(@mlightcad/mtext-renderer@0.11.9(three@0.172.0))(three@0.172.0)
+        version: 0.2.23(@mlightcad/mtext-renderer@0.11.10(three@0.172.0))(three@0.172.0)
       '@mlightcad/mtext-renderer':
         specifier: ^0.11.9
-        version: 0.11.9(three@0.172.0)
+        version: 0.11.10(three@0.172.0)
       '@mlightcad/three-renderer':
         specifier: workspace:*
         version: link:../three-renderer
       '@mlightcad/three-viewcube':
-        specifier: 0.0.9
-        version: 0.0.9(three@0.172.0)
+        specifier: 0.0.10
+        version: 0.0.10(three@0.172.0)
       '@types/lodash-es':
         specifier: ^4.17.12
         version: 4.17.12
@@ -266,11 +266,11 @@ importers:
         specifier: ^1.10.3
         version: 1.10.3
       '@mlightcad/mtext-parser':
-        specifier: ^1.4.1
-        version: 1.4.1
+        specifier: ^1.5.0
+        version: 1.5.0
       '@mlightcad/mtext-renderer':
         specifier: ^0.11.9
-        version: 0.11.9(three@0.172.0)
+        version: 0.11.10(three@0.172.0)
 
   packages/cad-viewer:
     devDependencies:
@@ -297,16 +297,16 @@ importers:
         version: 1.10.3
       '@mlightcad/ribbon':
         specifier: ^0.1.10
-        version: 0.1.10(@element-plus/icons-vue@2.3.2(vue@3.5.41(typescript@5.9.3)))(element-plus@2.13.6(typescript@5.9.3)(vue@3.5.41(typescript@5.9.3)))(vue@3.5.41(typescript@5.9.3))
+        version: 0.1.11(@element-plus/icons-vue@2.3.2(vue@3.5.41(typescript@5.9.3)))(element-plus@2.13.6(typescript@5.9.3)(vue@3.5.41(typescript@5.9.3)))(vue@3.5.41(typescript@5.9.3))
       '@mlightcad/three-renderer':
         specifier: workspace:*
         version: link:../three-renderer
       '@mlightcad/three-viewcube':
-        specifier: 0.0.9
-        version: 0.0.9(three@0.172.0)
+        specifier: 0.0.10
+        version: 0.0.10(three@0.172.0)
       '@mlightcad/ui-components':
-        specifier: ^0.1.6
-        version: 0.1.6(element-plus@2.13.6(typescript@5.9.3)(vue@3.5.41(typescript@5.9.3)))(vue@3.5.41(typescript@5.9.3))
+        specifier: ^0.1.7
+        version: 0.1.7(element-plus@2.13.6(typescript@5.9.3)(vue@3.5.41(typescript@5.9.3)))(vue@3.5.41(typescript@5.9.3))
       '@vitejs/plugin-vue':
         specifier: ^6.0.8
         version: 6.0.8(vite@6.4.3(@types/node@24.12.4)(sass@1.102.0)(yaml@2.9.0))(vue@3.5.41(typescript@5.9.3))
@@ -419,7 +419,7 @@ importers:
         version: 1.10.3
       '@mlightcad/mtext-renderer':
         specifier: ^0.11.9
-        version: 0.11.9(three@0.172.0)
+        version: 0.11.10(three@0.172.0)
       '@types/three':
         specifier: ^0.172.0
         version: 0.172.0
@@ -1410,8 +1410,8 @@ packages:
   '@floating-ui/utils@0.2.11':
     resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
 
-  '@fxts/core@1.26.0':
-    resolution: {integrity: sha512-ONaza1CGr8dLKmJ0HQgi0h4XuyDJMr0P70M7o/My/YeeRxuYoSANHjE2nSY7xO4WHgxUD5ojd5dpxlFOzAEJsA==}
+  '@fxts/core@1.28.0':
+    resolution: {integrity: sha512-6AC3L6wScT5lLaipQRNgBJ/2PrL7rjV1tIt6S2dz7wRZ6c4gds+RWuG5djhq7WsyVB5jGYGImcVMl/DUhG0DlQ==}
 
   '@gerrit0/mini-shiki@3.23.0':
     resolution: {integrity: sha512-bEMORlG0cqdjVyCEuU0cDQbORWX+kYCeo0kV1lbxF5bt4r7SID2l9bqsxJEM0zndaxpOUT7riCyIVEuqq/Ynxg==}
@@ -1639,13 +1639,13 @@ packages:
   '@mlightcad/data-model@1.10.3':
     resolution: {integrity: sha512-KoWl3zH0sup/rfYi78pCLIfrgPm9pD9lMWdPqdG1QuG3cz62nRnlIe74kV6rY7uyZRPEwla+5jfpVYOOLuyW+g==}
 
-  '@mlightcad/dxf-json-converter@1.10.3':
-    resolution: {integrity: sha512-+VnBxGoC8x82nzhSPuG/MICCd67skxWSHavUd3Z1FmbkryHAXo8tIOpfAQSM+0nt0SiRU7MrbmxApF93tJ5XCQ==}
+  '@mlightcad/dxf-json-converter@1.12.0':
+    resolution: {integrity: sha512-M6domJZaTIrHpzOSAcKd19+SMQm9v3jcRTBfPFcIZzpdPCjK4M3VOp5acgtOfLd+vVSyvD5c/PJoUNuxtLGJBA==}
     peerDependencies:
       '@mlightcad/data-model': ^1.10.3
 
-  '@mlightcad/dxf-json@1.2.5':
-    resolution: {integrity: sha512-yUwYrRP321Pzjun4h69KFz5YnGoqA7iKZvP+Y93F4yMe2avko5yd/iaNxAZxCdrO6JeOsi3rcEaYBtg6UDiK8Q==}
+  '@mlightcad/dxf-json@1.2.8':
+    resolution: {integrity: sha512-pn4kY2+cYLq9xVVeUJUwzBPyYGGIuO6uKc+bKAzWfSaZAWTgrbK7WrY+VHR4od9wrWdDwNWknIqVq4KBZPD7SA==}
 
   '@mlightcad/geometry-engine@3.10.3':
     resolution: {integrity: sha512-IJAtMsKser3XAZmtdgtpipHTXlYQgnQ6oJxGqf3lMRGdc4LEMwjYh0H8uCR9iLCJZIZ2WLYp1cWYyopNtWnXbg==}
@@ -1658,34 +1658,31 @@ packages:
       '@mlightcad/common': 1.10.3
       '@mlightcad/geometry-engine': 3.10.3
 
-  '@mlightcad/libredwg-converter@3.10.3':
-    resolution: {integrity: sha512-qOJnEc3Sur5BoHYKRiMV0hTES7Id0N+CHWBGiV2tDlDtNkl21tpHQrZl82aOXsAuEeLPS5gDSNuHkrBeXYzQ+A==}
+  '@mlightcad/libredwg-converter@3.12.5':
+    resolution: {integrity: sha512-FeYJ6t8mTxK6s12lDPpcjbo/hZELAC8ZK9MC05zqINrzGOu3rGObSfZ+Kq0Sw7eK6PUZyEDN59lyQZBap6g7NQ==}
     peerDependencies:
       '@mlightcad/data-model': ^1.10.3
 
-  '@mlightcad/libredwg-web@0.7.7':
-    resolution: {integrity: sha512-JnEug2IVXafUecM9/WCQgH8mJRliaEq0Uxu3Mxt0Zk82n1MrSd25iA0Boo7e7t9qVwRPxQLGFxWoyPIrAeTy4w==}
+  '@mlightcad/libredwg-web@0.7.9':
+    resolution: {integrity: sha512-tqjx0eCiR0CNI3TyO3LVYzl4ptuzSFm7asGn/C1YiJaEk7Vneto+lRrVUco85qw+PZDihaFLwWqdYIEse1swbA==}
     engines: {node: '>=20'}
 
-  '@mlightcad/mtext-input-box@0.2.20':
-    resolution: {integrity: sha512-hCRu7s0W6qTTZx18Ftx6teY4zATNl7iQBVRjjfERTRHiPtgJxUdVG9AHYhUCnWaMI8yC+xZGL/0Pl4u7Q+wy1w==}
+  '@mlightcad/mtext-input-box@0.2.23':
+    resolution: {integrity: sha512-b3AmQhpVkqTb3ZaQ7Ty00XnngcFo5bjBPcdXrDDs4plUV841e9p86E1xLFtv+SLnLIx5m7/KkDKAIqLduj7WmQ==}
     peerDependencies:
       '@mlightcad/mtext-renderer': ^0.11.9
       three: ^0.172.0
 
-  '@mlightcad/mtext-parser@1.4.1':
-    resolution: {integrity: sha512-PU7D5H/k25vZpTERabpdn5HVAs8+SBNRqgi08wRPiplxTE1eB/zBZRNRrSwHqyWx6xMeQmZ9mhh9DPNpte3gYQ==}
-
   '@mlightcad/mtext-parser@1.5.0':
     resolution: {integrity: sha512-Yl/IQmSIGV1UUl/TyUptoOpNBunywcEE7yh4k9SFDXljHDTTI92VmqkVFxf4eYzhoWF4MNXIl4qgQV1P1Rbn6g==}
 
-  '@mlightcad/mtext-renderer@0.11.9':
-    resolution: {integrity: sha512-Suw909aN9AFr/4pWyXzWcW+wY1iOnDvbaFaR3FtnchltrcJhF9vRep7hcavMVtFLm35TcHnCGXSndq9R9J9kqQ==}
+  '@mlightcad/mtext-renderer@0.11.10':
+    resolution: {integrity: sha512-TDKUFAi4iMTevQCLiyOQN1CW16jET4mQFbDQ/KiyUrqsKxkzqHl/EMlR9Ae6z5BchKs2FosnWxKljAK1fT6zQA==}
     peerDependencies:
       three: ^0.172.0
 
-  '@mlightcad/ribbon@0.1.10':
-    resolution: {integrity: sha512-bAAatX3zIqpyrRphbEqe5mVgxX63jJJ9vHu4FYbIJnsWzrPAg07lGZS9xs/2eZOtYWj11uQB5WOuGbh113BthQ==}
+  '@mlightcad/ribbon@0.1.11':
+    resolution: {integrity: sha512-onOfx1NZQ2QHZ9HOpVDaUrXV66LM97E2kpCUC7DASCMtVDC5Ydy1J6lq32ID69PSoWvDqQ9mkrvJc4nYm7Ja4A==}
     peerDependencies:
       '@element-plus/icons-vue': ^2.3.2
       element-plus: ^2.12.0
@@ -1699,13 +1696,13 @@ packages:
     peerDependencies:
       three: ^0.172.0
 
-  '@mlightcad/three-viewcube@0.0.9':
-    resolution: {integrity: sha512-oGWC+NrfgfHyCGtO/3NGC3M91qrj9Y1cOVaRKGALEicqCJYg7M4fKUbuag2rCNZLml1BdhpS9JMTZyfbYeAO7Q==}
+  '@mlightcad/three-viewcube@0.0.10':
+    resolution: {integrity: sha512-b+Waukrt3R7PUFaHmVEwyDhrm/1/r/a3cr9L7RfVOvISYPGAbQVEsChUch5gHhWU10ZOyVzr4RDJY1IgbscFiw==}
     peerDependencies:
       three: ^0.172.0
 
-  '@mlightcad/ui-components@0.1.6':
-    resolution: {integrity: sha512-Mb/tVZykblnWZzuuffp74zjGfdpLbODZ4wDFITwnw7zvr2YT2b1ckpNLO/cf9lMNGQurbmQpDOSPVRD0OFL/lw==}
+  '@mlightcad/ui-components@0.1.7':
+    resolution: {integrity: sha512-ZIQcTL9oSmDG87EjjIPYlw4x6BmsIpilpK7ZUQHzyR3S5YeVKiDK2B2OzLN6pewtiNvrjlog0rO5L63R2uUCVg==}
     peerDependencies:
       element-plus: ^2.12.0
       vue: ^3.4.21
@@ -3617,6 +3614,10 @@ packages:
 
   iconv-lite@0.7.2:
     resolution: {integrity: sha512-im9DjEDQ55s9fL4EYzOAv0yMqmMBSZp6G0VvFyTMPKWxiSBHUj9NW/qqLmXUwXrrM7AvqSlTCfvqRb0cM8yYqw==}
+    engines: {node: '>=0.10.0'}
+
+  iconv-lite@0.7.3:
+    resolution: {integrity: sha512-IKXpvIzjnC9XTAUbVBcMfGS0EPaIXtW6v+zr+RRp+hqULEpo0owZax6wyRwPOJbWbzjYspQwusTsfVr0ifh4uQ==}
     engines: {node: '>=0.10.0'}
 
   idb@8.0.3:
@@ -6430,7 +6431,7 @@ snapshots:
 
   '@floating-ui/utils@0.2.11': {}
 
-  '@fxts/core@1.26.0':
+  '@fxts/core@1.28.0':
     dependencies:
       tslib: 2.8.1
 
@@ -6456,7 +6457,7 @@ snapshots:
   '@inquirer/external-editor@1.0.3(@types/node@24.12.4)':
     dependencies:
       chardet: 2.1.1
-      iconv-lite: 0.7.2
+      iconv-lite: 0.7.3
     optionalDependencies:
       '@types/node': 24.12.4
 
@@ -6824,14 +6825,14 @@ snapshots:
       iconv-lite: 0.7.2
       uid: 2.0.2
 
-  '@mlightcad/dxf-json-converter@1.10.3(@mlightcad/data-model@1.10.3)':
+  '@mlightcad/dxf-json-converter@1.12.0(@mlightcad/data-model@1.10.3)':
     dependencies:
       '@mlightcad/data-model': 1.10.3
-      '@mlightcad/dxf-json': 1.2.5
+      '@mlightcad/dxf-json': 1.2.8
 
-  '@mlightcad/dxf-json@1.2.5':
+  '@mlightcad/dxf-json@1.2.8':
     dependencies:
-      '@fxts/core': 1.26.0
+      '@fxts/core': 1.28.0
 
   '@mlightcad/geometry-engine@3.10.3(@mlightcad/common@1.10.3)':
     dependencies:
@@ -6842,33 +6843,31 @@ snapshots:
       '@mlightcad/common': 1.10.3
       '@mlightcad/geometry-engine': 3.10.3(@mlightcad/common@1.10.3)
 
-  '@mlightcad/libredwg-converter@3.10.3(@mlightcad/data-model@1.10.3)':
+  '@mlightcad/libredwg-converter@3.12.5(@mlightcad/data-model@1.10.3)':
     dependencies:
       '@mlightcad/data-model': 1.10.3
-      '@mlightcad/libredwg-web': 0.7.7
+      '@mlightcad/libredwg-web': 0.7.9
 
-  '@mlightcad/libredwg-web@0.7.7': {}
+  '@mlightcad/libredwg-web@0.7.9': {}
 
-  '@mlightcad/mtext-input-box@0.2.20(@mlightcad/mtext-renderer@0.11.9(three@0.172.0))(three@0.172.0)':
+  '@mlightcad/mtext-input-box@0.2.23(@mlightcad/mtext-renderer@0.11.10(three@0.172.0))(three@0.172.0)':
     dependencies:
-      '@mlightcad/mtext-renderer': 0.11.9(three@0.172.0)
+      '@mlightcad/mtext-renderer': 0.11.10(three@0.172.0)
       '@mlightcad/text-box-cursor': 0.1.1(three@0.172.0)
       three: 0.172.0
 
-  '@mlightcad/mtext-parser@1.4.1': {}
-
   '@mlightcad/mtext-parser@1.5.0': {}
 
-  '@mlightcad/mtext-renderer@0.11.9(three@0.172.0)':
+  '@mlightcad/mtext-renderer@0.11.10(three@0.172.0)':
     dependencies:
       '@mlightcad/mtext-parser': 1.5.0
       '@mlightcad/shx-parser': 1.4.5
-      iconv-lite: 0.7.2
+      iconv-lite: 0.7.3
       idb: 8.0.3
       opentype.js: 2.0.0
       three: 0.172.0
 
-  '@mlightcad/ribbon@0.1.10(@element-plus/icons-vue@2.3.2(vue@3.5.41(typescript@5.9.3)))(element-plus@2.13.6(typescript@5.9.3)(vue@3.5.41(typescript@5.9.3)))(vue@3.5.41(typescript@5.9.3))':
+  '@mlightcad/ribbon@0.1.11(@element-plus/icons-vue@2.3.2(vue@3.5.41(typescript@5.9.3)))(element-plus@2.13.6(typescript@5.9.3)(vue@3.5.41(typescript@5.9.3)))(vue@3.5.41(typescript@5.9.3))':
     dependencies:
       '@element-plus/icons-vue': 2.3.2(vue@3.5.41(typescript@5.9.3))
       element-plus: 2.13.6(typescript@5.9.3)(vue@3.5.41(typescript@5.9.3))
@@ -6880,11 +6879,11 @@ snapshots:
     dependencies:
       three: 0.172.0
 
-  '@mlightcad/three-viewcube@0.0.9(three@0.172.0)':
+  '@mlightcad/three-viewcube@0.0.10(three@0.172.0)':
     dependencies:
       three: 0.172.0
 
-  '@mlightcad/ui-components@0.1.6(element-plus@2.13.6(typescript@5.9.3)(vue@3.5.41(typescript@5.9.3)))(vue@3.5.41(typescript@5.9.3))':
+  '@mlightcad/ui-components@0.1.7(element-plus@2.13.6(typescript@5.9.3)(vue@3.5.41(typescript@5.9.3)))(vue@3.5.41(typescript@5.9.3))':
     dependencies:
       element-plus: 2.13.6(typescript@5.9.3)(vue@3.5.41(typescript@5.9.3))
       vue: 3.5.41(typescript@5.9.3)
@@ -8812,6 +8811,10 @@ snapshots:
       safer-buffer: 2.1.2
 
   iconv-lite@0.7.2:
+    dependencies:
+      safer-buffer: 2.1.2
+
+  iconv-lite@0.7.3:
     dependencies:
       safer-buffer: 2.1.2
 
