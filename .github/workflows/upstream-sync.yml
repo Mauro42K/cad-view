@@ -16,39 +16,102 @@ env:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout downstream history
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
 
-      - name: Fetch upstream and existing sync branch
+      - name: Fetch upstream and downstream main
         run: |
           git remote add upstream "https://github.com/${UPSTREAM_REPOSITORY}.git"
           git fetch --prune origin main
           git fetch --prune upstream main
+
+      - name: Validate clean upstream baseline
+        id: upstream_health
+        run: |
+          set -o pipefail
+          upstream_sha="$(git rev-parse upstream/main)"
+          echo "upstream_sha=${upstream_sha}" >> "$GITHUB_OUTPUT"
+          health_dir="$RUNNER_TEMP/cad-view-upstream-health"
+          failed_command="git worktree add --detach ${health_dir} ${upstream_sha}"
+          cleanup() {
+            git worktree remove --force "$health_dir" >/dev/null 2>&1 || true
+          }
+          on_exit() {
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              {
+                echo '## Clean upstream unhealthy'
+                echo
+                echo "- Upstream SHA: \`${upstream_sha}\`"
+                echo "- Failed command: \`${failed_command}\`"
+                echo '- Reason: clean upstream did not pass its supported validation baseline.'
+                echo '- Downstream main was not modified and no synchronization branch or PR was published.'
+              } >> "$GITHUB_STEP_SUMMARY"
+            fi
+            cleanup
+            exit "$status"
+          }
+          trap on_exit EXIT
+          git worktree add --detach "$health_dir" "$upstream_sha"
+          cd "$health_dir"
+          run_check() {
+            failed_command="$*"
+            "$@"
+            failed_command=''
+          }
+          run_check corepack enable
+          run_check corepack prepare pnpm@10.33.4 --activate
+          run_check pnpm install --frozen-lockfile
+          run_check pnpm lint
+          run_check pnpm test
+          run_check pnpm build
+
+      - name: Check upstream/downstream ancestry
+        id: topology
+        env:
+          UPSTREAM_SHA: ${{ steps.upstream_health.outputs.upstream_sha }}
+        run: |
+          merge_base="$(git merge-base origin/main upstream/main || true)"
+          if [ -z "$merge_base" ]; then
+            {
+              echo '## Healthy upstream — initial parity reconciliation required'
+              echo
+              echo "- Upstream SHA: \`${UPSTREAM_SHA}\`"
+              echo '- Clean upstream passed its own validation baseline.'
+              echo '- Downstream and upstream have no merge base.'
+              echo '- No synchronization branch or PR was published; downstream main was not modified.'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo 'common_ancestry=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "merge_base=${merge_base}" >> "$GITHUB_OUTPUT"
+          echo 'common_ancestry=true' >> "$GITHUB_OUTPUT"
+
+      - name: Rebuild synchronization candidate from current main
+        id: reconcile
+        if: steps.topology.outputs.common_ancestry == 'true'
+        env:
+          UPSTREAM_SHA: ${{ steps.upstream_health.outputs.upstream_sha }}
+        run: |
           if git ls-remote --exit-code --heads origin "${SYNC_BRANCH}" >/dev/null 2>&1; then
             git fetch --prune origin "${SYNC_BRANCH}"
           fi
           git switch --detach origin/main
           git branch -f "${SYNC_BRANCH}" origin/main
           git switch "${SYNC_BRANCH}"
-
-      - name: Merge upstream without rewriting history
-        id: reconcile
-        run: |
-          upstream_sha="$(git rev-parse upstream/main)"
-          echo "upstream_sha=${upstream_sha}" >> "$GITHUB_OUTPUT"
           if ! git merge --no-edit --no-ff upstream/main; then
             git merge --abort || true
             {
               echo '## Upstream synchronization blocked'
               echo
-              echo "- Upstream SHA: \`$upstream_sha\`"
-              echo '- Reason: merge conflict while constructing the synchronization candidate.'
-              echo '- Downstream main was not modified.'
+              echo "- Upstream SHA: \`${UPSTREAM_SHA}\`"
+              echo '- Reason: reconciliation conflict after clean upstream passed health validation.'
+              echo '- Downstream main was not modified and no candidate was pushed.'
             } >> "$GITHUB_STEP_SUMMARY"
-            echo "Upstream merge conflict at $upstream_sha; no branch update was pushed." >&2
             exit 1
           fi
           if git diff --quiet origin/main HEAD; then
@@ -57,22 +120,35 @@ jobs:
           fi
           echo 'changed=true' >> "$GITHUB_OUTPUT"
           git diff --check
-          git status --short
 
-      - name: Validate synchronization candidate
+      - name: Validate reconciled synchronization candidate
         if: steps.reconcile.outputs.changed == 'true'
         env:
-          UPSTREAM_SHA: ${{ steps.reconcile.outputs.upstream_sha }}
+          UPSTREAM_SHA: ${{ steps.upstream_health.outputs.upstream_sha }}
         run: |
           set -o pipefail
           failed_command=''
-          trap 'status=$?; if [ "$status" -ne 0 ]; then { echo "## Upstream synchronization blocked"; echo; echo "- Upstream SHA: \`$UPSTREAM_SHA\`"; echo "- Failed command: \`$failed_command\`"; echo "- Reason: the clean upstream candidate did not pass the downstream validation baseline."; echo "- Downstream main was not modified."; } >> "$GITHUB_STEP_SUMMARY"; fi; exit "$status"' EXIT
+          on_exit() {
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              {
+                echo '## Synchronization candidate blocked'
+                echo
+                echo "- Upstream SHA: \`${UPSTREAM_SHA}\`"
+                echo "- Failed command: \`${failed_command}\`"
+                echo '- Reason: the reconciled downstream candidate did not pass validation.'
+                echo '- Downstream main was not modified and the candidate was not pushed.'
+              } >> "$GITHUB_STEP_SUMMARY"
+            fi
+            exit "$status"
+          }
+          trap on_exit EXIT
+          corepack enable
           run_check() {
             failed_command="$*"
             "$@"
             failed_command=''
           }
-          corepack enable
           run_check corepack prepare pnpm@10.33.4 --activate
           run_check pnpm install --frozen-lockfile
           run_check pnpm lint
@@ -93,7 +169,7 @@ jobs:
         if: steps.reconcile.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          UPSTREAM_SHA: ${{ steps.reconcile.outputs.upstream_sha }}
+          UPSTREAM_SHA: ${{ steps.upstream_health.outputs.upstream_sha }}
         run: |
           existing="$(gh pr list --base main --head "${SYNC_BRANCH}" --state open --json number --jq '.[0].number')"
           if [ -n "$existing" ]; then
@@ -104,4 +180,4 @@ jobs:
             --base main \
             --head "${SYNC_BRANCH}" \
             --title "chore: synchronize upstream main ${UPSTREAM_SHA}" \
-            --body "Automated upstream synchronization from mlightcad/cad-viewer.\n\nSource SHA: ${UPSTREAM_SHA}\n\nReview the downstream delta and validation before merging."
+            --body "Automated upstream synchronization from mlightcad/cad-viewer.\n\nSource SHA: ${UPSTREAM_SHA}\n\nClean upstream health and downstream candidate validation passed. Review before merging."
