@@ -1,6 +1,6 @@
-# CAD View — adaptación local de Mauro Engineering Standard v1.0.2
+# CAD View — adaptación local de Mauro Engineering Standard v1.0.5
 
-Este archivo adapta [Mauro Engineering Standard v1.0.2](https://github.com/Mauro42K/engineering-standard/blob/v1.0.2/STANDARD.md) a este repositorio. El estándar canónico define el proceso común; aquí sólo se mantienen el contexto, los comandos, los riesgos y las reglas operativas específicas de CAD View.
+Este archivo adapta [Mauro Engineering Standard v1.0.5](https://github.com/Mauro42K/engineering-standard/blob/v1.0.5/STANDARD.md) a este repositorio. El estándar canónico define el proceso común; aquí sólo se mantienen el contexto, los comandos, los riesgos y las reglas operativas específicas de CAD View.
 
 ## Contexto y límites
 
