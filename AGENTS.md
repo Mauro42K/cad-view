@@ -25,7 +25,7 @@ pnpm test
 pnpm --filter @mlightcad/cad-viewer-example test:e2e
 ```
 
-`.github/workflows/upstream-sync.yml` comprueba upstream automáticamente cada día y mediante ejecución manual. Un nuevo commit upstream no actualiza `main`: sólo un candidato que pase la línea base de validación produce o actualiza una PR. Los conflictos deben resolverse manualmente; nunca se fuerza `main` ni se reparan dependencias upstream automáticamente.
+`.github/workflows/upstream-sync.yml` comprueba upstream automáticamente cada día y mediante ejecución manual. Un nuevo commit upstream no actualiza `main`: sólo un candidato que pase la línea base de validación produce o actualiza una PR. Cada candidato se reconstruye desde el `origin/main` actual; `chore/upstream-sync` es una rama descartable de automatización, no una segunda rama de producto de larga duración. Los conflictos deben resolverse manualmente; nunca se fuerza `main` ni se reparan dependencias upstream automáticamente.
 
 ## Dependencias y seguridad
 

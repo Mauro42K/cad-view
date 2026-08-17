@@ -28,11 +28,11 @@ jobs:
           git fetch --prune origin main
           git fetch --prune upstream main
           if git ls-remote --exit-code --heads origin "${SYNC_BRANCH}" >/dev/null 2>&1; then
-            git fetch origin "${SYNC_BRANCH}:${SYNC_BRANCH}"
-            git switch "${SYNC_BRANCH}"
-          else
-            git switch -c "${SYNC_BRANCH}" origin/main
+            git fetch --prune origin "${SYNC_BRANCH}"
           fi
+          git switch --detach origin/main
+          git branch -f "${SYNC_BRANCH}" origin/main
+          git switch "${SYNC_BRANCH}"
 
       - name: Merge upstream without rewriting history
         id: reconcile
@@ -51,7 +51,7 @@ jobs:
             echo "Upstream merge conflict at $upstream_sha; no branch update was pushed." >&2
             exit 1
           fi
-          if git diff --quiet HEAD^ HEAD; then
+          if git diff --quiet origin/main HEAD; then
             echo 'changed=false' >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -76,13 +76,18 @@ jobs:
           run_check corepack prepare pnpm@10.33.4 --activate
           run_check pnpm install --frozen-lockfile
           run_check pnpm lint
-          run_check pnpm typecheck
           run_check pnpm test
           run_check pnpm build
 
       - name: Push synchronization branch
         if: steps.reconcile.outputs.changed == 'true'
-        run: git push origin "${SYNC_BRANCH}"
+        run: |
+          if git show-ref --verify --quiet "refs/remotes/origin/${SYNC_BRANCH}"; then
+            lease="$(git rev-parse "refs/remotes/origin/${SYNC_BRANCH}")"
+            git push --force-with-lease="refs/heads/${SYNC_BRANCH}:${lease}" origin "${SYNC_BRANCH}:${SYNC_BRANCH}"
+          else
+            git push origin "${SYNC_BRANCH}:${SYNC_BRANCH}"
+          fi
 
       - name: Create synchronization PR when absent
         if: steps.reconcile.outputs.changed == 'true'

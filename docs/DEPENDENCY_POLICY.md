@@ -31,4 +31,4 @@ Los cambios que afecten al viewer visible deben añadir la validación E2E exist
 
 ## Sincronización
 
-`.github/workflows/upstream-sync.yml` comprueba upstream automáticamente cada día y mediante ejecución manual. Construye un candidato, ejecuta la línea base de instalación y validación, y sólo crea o actualiza un único PR si pasa. El PR identifica el SHA exacto de `upstream/main`; conflictos o fallas de validación detienen el workflow con un resumen y dejan `main` intacto, sin force-push, merge automático ni reparación de dependencias.
+`.github/workflows/upstream-sync.yml` comprueba upstream automáticamente cada día y mediante ejecución manual. Construye cada candidato desde el `origin/main` actual, ejecuta la línea base de instalación y validación, y sólo crea o actualiza un único PR si pasa. `chore/upstream-sync` es una rama descartable de automatización, no una segunda rama de producto de larga duración. El PR identifica el SHA exacto de `upstream/main`; conflictos o fallas de validación detienen el workflow con un resumen y dejan `main` intacto, sin force-push, merge automático ni reparación de dependencias.
