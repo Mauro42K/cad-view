@@ -38,6 +38,7 @@ jobs:
           health_dir="$RUNNER_TEMP/cad-view-upstream-health"
           failed_command="git worktree add --detach ${health_dir} ${upstream_sha}"
           cleanup() {
+            cd "$GITHUB_WORKSPACE"
             git worktree remove --force "$health_dir" >/dev/null 2>&1 || true
           }
           on_exit() {
