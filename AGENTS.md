@@ -1,47 +1,35 @@
-# CAD View — adaptación local de Mauro Engineering Standard v1.0.5
+# CAD View — downstream de mlightcad/cad-viewer
 
-Este archivo adapta [Mauro Engineering Standard v1.0.5](https://github.com/Mauro42K/engineering-standard/blob/v1.0.5/STANDARD.md) a este repositorio. El estándar canónico define el proceso común; aquí sólo se mantienen el contexto, los comandos, los riesgos y las reglas operativas específicas de CAD View.
+CAD View es un downstream del repositorio [`mlightcad/cad-viewer`](https://github.com/mlightcad/cad-viewer). Upstream es la fuente de verdad para el producto, la arquitectura, las dependencias, tooling, funcionalidades y ejemplos; su árbol limpio es también la línea base para validar sincronizaciones.
 
-## Contexto y límites
+Si el upstream limpio falla su propia validación relevante, la sincronización downstream debe detenerse de forma segura. No se debe reparar automáticamente esa falla downstream salvo un requisito urgente y documentado.
 
-- CAD View es una copia independiente basada en [`mlightcad/cad-viewer`](https://github.com/mlightcad/cad-viewer); no existe sincronización automática con upstream. Una sincronización upstream es una tarea separada y deliberada, con fuente explícita, diff y validación propios.
-- Dependabot sólo actualiza dependencias; no sincroniza código ni historial con upstream.
-- La aplicación visible vive en `packages/cad-viewer-example`.
-- El workspace requiere Node.js 24+ y pnpm 10+; el gestor fijado es pnpm `10.33.4`.
-- Los DWG locales pertenecen en `local-test-files/`, que está ignorado por Git. Nunca deben colocarse en `public/` ni confirmarse en Git.
+## Límites locales
 
-## Comandos y gates reales
+- Mantener sólo deltas downstream mínimos y justificados.
+- No modernizar dependencias upstream de forma independiente.
+- La aplicación visible es `packages/cad-viewer-example`.
+- Node.js requerido: 24+; pnpm fijado: `10.33.4`.
+- Los DWG/DXF locales pertenecen en `local-test-files/`; nunca deben versionarse ni colocarse en `public/`.
+- `vercel.json`, este archivo, la política de dependencias y los controles CI son configuración downstream; no deben modificar el código de producto upstream sin justificación documentada.
 
-Checks locales del workspace:
+## Validación
+
+Usar primero los scripts soportados por upstream:
 
 ```sh
+pnpm install --frozen-lockfile
 pnpm lint
-pnpm typecheck
+pnpm build
 pnpm test
-pnpm build
 ```
 
-Para reproducir los gates de CI, usar `pnpm install --frozen-lockfile` y:
+`.github/workflows/upstream-sync.yml` comprueba upstream automáticamente cada día y mediante ejecución manual. Primero valida upstream limpio; sólo después intenta sincronizar. Un nuevo commit upstream no actualiza `main`: sólo un candidato que pase la línea base y sea integrable produce o actualiza una PR. La salud upstream es distinta de la sincronizabilidad; antes de la primera paridad las historias pueden no tener ancestry común y requieren una reconciliación manual deliberada. Cada candidato se reconstruye desde el `origin/main` actual; `chore/upstream-sync` es una rama descartable de automatización, no una segunda rama de producto de larga duración. Los conflictos deben resolverse manualmente; nunca se fuerza `main` ni se reparan dependencias upstream automáticamente.
 
-```sh
-pnpm typecheck:ci
-pnpm test:ci
-pnpm lint
-pnpm build
-```
+## Dependencias y seguridad
 
-Los cambios que afecten la aplicación visible pueden requerir además el E2E existente:
+La dirección de versiones de dependencias upstream pertenece a upstream. Las alertas de seguridad se revisan manualmente y pueden justificar una excepción documentada. Las dependencias MLightCAD acopladas deben validarse como conjunto.
 
-```sh
-pnpm --filter @mlightcad/cad-viewer-example test:e2e
-```
+## Deploy
 
-## Dependencias, seguridad y deuda
-
-- La política Dependabot vigente es manual: el repositorio es privado, `main` no está protegido y `ENABLE_DEPENDABOT_AUTOMERGE` debe permanecer ausente o deshabilitado. El workflow de auto-merge es sólo un mecanismo futuro condicionado por esa variable; no constituye autorización para habilitarlo.
-- `pdfjs-dist` requiere una revisión dedicada de API/worker y smoke test con un PDF representativo. Deben preservarse las fases S0–S3, las alertas y la deuda de `docs/DEPENDENCY_POLICY.md`; no se debe declarar remediation cerrada sin evidencia actual.
-- Las dependencias MLightCAD acopladas deben validarse como conjunto. No se debe modificar código funcional únicamente para acomodar un conjunto de dependencias incompatible.
-
-## Deploy y operación
-
-- El deploy configurado en `vercel.json` usa `pnpm build` y publica `packages/cad-viewer-example/dist`.
+Vercel ejecuta `pnpm build` y publica `packages/cad-viewer-example/dist`, según `vercel.json`.

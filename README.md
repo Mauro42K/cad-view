@@ -26,6 +26,4 @@ Local DWG files belong in `local-test-files/` and are ignored by Git. Do not put
 
 ## Dependabot
 
-Dependabot checks for dependency updates weekly and opens pull requests automatically.
-There is no auto-merge.
-Each PR should be reviewed with a build and a DWG test before merging.
+Routine dependency version updates follow upstream. GitHub security alerts remain available and may justify a documented temporary downstream exception.
