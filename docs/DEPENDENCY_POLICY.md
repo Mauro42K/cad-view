@@ -27,7 +27,7 @@ pnpm build
 pnpm test
 ```
 
-Los cambios que afecten al viewer visible deben añadir la validación E2E existente y una prueba representativa de carga CAD cuando los fixtures estén disponibles. `pdfjs-dist` requiere además revisión específica de API/worker y smoke test PDF.
+Los cambios que afecten al viewer visible deben añadir la validación E2E de upstream cuando esa suite y sus fixtures estén presentes en el downstream, además de una prueba representativa de carga CAD cuando los fixtures estén disponibles. `pdfjs-dist` requiere además revisión específica de API/worker y smoke test PDF.
 
 ## Sincronización
 

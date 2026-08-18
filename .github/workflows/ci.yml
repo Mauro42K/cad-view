@@ -27,7 +27,3 @@ jobs:
       - run: pnpm lint
       - run: pnpm build
       - run: pnpm test
-      - run: pnpm --filter @mlightcad/cad-viewer-example exec playwright install-deps chromium
-      - run: pnpm --filter @mlightcad/cad-viewer-example test:e2e
-        env:
-          PLAYWRIGHT_BROWSER_CHANNEL: chrome

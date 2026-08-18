@@ -22,7 +22,6 @@ pnpm install --frozen-lockfile
 pnpm lint
 pnpm build
 pnpm test
-pnpm --filter @mlightcad/cad-viewer-example test:e2e
 ```
 
 `.github/workflows/upstream-sync.yml` comprueba upstream automáticamente cada día y mediante ejecución manual. Primero valida upstream limpio; sólo después intenta sincronizar. Un nuevo commit upstream no actualiza `main`: sólo un candidato que pase la línea base y sea integrable produce o actualiza una PR. La salud upstream es distinta de la sincronizabilidad; antes de la primera paridad las historias pueden no tener ancestry común y requieren una reconciliación manual deliberada. Cada candidato se reconstruye desde el `origin/main` actual; `chore/upstream-sync` es una rama descartable de automatización, no una segunda rama de producto de larga duración. Los conflictos deben resolverse manualmente; nunca se fuerza `main` ni se reparan dependencias upstream automáticamente.
