@@ -20,7 +20,7 @@
   - Customizable base URL for fonts, templates, and example files
   
   COMPONENTS INCLUDED:
-  - Main menu and language selector
+  - Ribbon with CAD commands and language selector
   - Toolbars with CAD commands
   - Layer manager for controlling entity visibility
   - Command line for text-based commands
@@ -91,6 +91,7 @@ import {
   eventBus
 } from '@mlightcad/cad-simple-viewer'
 import { log } from '@mlightcad/data-model'
+import { provideLocale } from '@mlightcad/ui-components'
 import { ElConfigProvider, ElMessage } from 'element-plus'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -103,7 +104,7 @@ import {
   setColorTheme,
   toggleDark,
   useDocument,
-  useEntityDrawStyle,
+  useDrawStyleToolbarVisible,
   useLocale,
   useNotificationCenter,
   useSettings
@@ -114,13 +115,7 @@ import {
   resolveOpenFileErrorTitle
 } from '../util/openFileErrorMessage'
 import { MlDialogManager, MlFontFileReader } from './common'
-import {
-  MlEntityDrawStyleToolbar,
-  MlEntityInfo,
-  MlLanguageSelector,
-  MlMainMenu,
-  MlToolBars
-} from './layout'
+import { MlEntityInfo, MlToolBars } from './layout'
 import { MlNotificationCenter } from './notification'
 import { MlPaletteManager } from './palette'
 import { MlRibbonCommands } from './ribbon'
@@ -152,8 +147,9 @@ interface Props {
   baseUrl?: string
   /**
    * URL of the offline HTML viewer runtime (`viewer-runtime.iife.js`).
-   * Required for File menu “Export to HTML”; copy the file from
-   * `@mlightcad/cad-html-plugin` build output into your app assets.
+   * Used only for File menu “Export to HTML”. Copy the file from
+   * `@mlightcad/cad-html-plugin` into your app assets when you need HTML export.
+   * Not required to open or view DXF/DWG.
    */
   htmlViewerRuntimeUrl?: string | URL
   /**
@@ -187,11 +183,6 @@ interface Props {
    * Write uses {@link AcApOpenViewMode.Saved}.
    */
   openViewMode?: AcApOpenViewMode
-  /**
-   * When `true`, aborts opening if required fonts cannot be loaded.
-   * Defaults to `false` so unreachable font CDNs do not block entity parsing.
-   */
-  failOnFontLoadError?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -213,14 +204,14 @@ const buildOpenOptions = (): AcApOpenDatabaseOptions => ({
   mode: props.mode,
   drawNoPlotLayers: props.drawNoPlotLayers,
   progressiveRendering: props.progressiveRendering,
-  ...(props.openViewMode != null ? { openViewMode: props.openViewMode } : {}),
-  ...(props.failOnFontLoadError != null
-    ? { failOnFontLoadError: props.failOnFontLoadError }
-    : {})
+  ...(props.openViewMode != null ? { openViewMode: props.openViewMode } : {})
 })
 
 const { t } = useI18n()
-const { effectiveLocale, elementPlusLocale } = useLocale(props.locale)
+const { currentLocale, effectiveLocale, elementPlusLocale } = useLocale(
+  props.locale
+)
+provideLocale(currentLocale)
 const {
   info,
   warning,
@@ -271,6 +262,7 @@ const viewerThemeClass = computed(() =>
 )
 
 const features = useSettings()
+const drawStyleToolbarVisible = useDrawStyleToolbarVisible()
 const {
   beginDocumentOpening,
   endDocumentOpening,
@@ -295,7 +287,6 @@ watch(
   { immediate: true }
 )
 
-const { isShowToolbar } = useEntityDrawStyle(editor)
 provideViewerRect(containerRef)
 
 let headerResizeObserver: ResizeObserver | undefined
@@ -369,12 +360,13 @@ const openLocalFile = async (file: File) => {
   const options = buildOpenOptions()
   beginDocumentOpening()
   beginPendingOpen(options.mode ?? AcEdOpenMode.Read)
+  let fileContent: ArrayBuffer | null = null
   try {
     const reader = new FileReader()
     reader.readAsArrayBuffer(file)
 
     // Wait for file reading to complete
-    const fileContent = await new Promise<ArrayBuffer>((resolve, reject) => {
+    fileContent = await new Promise<ArrayBuffer>((resolve, reject) => {
       reader.onload = event => {
         const result = event.target?.result
         if (result) {
@@ -403,6 +395,7 @@ const openLocalFile = async (file: File) => {
       showClose: true
     })
   } finally {
+    fileContent = null
     endDocumentOpening()
     endPendingOpen()
   }
@@ -523,7 +516,7 @@ onUnmounted(() => {
 })
 
 watch(
-  [editorRef, isWriteMode, () => features.isShowToolbar],
+  [editorRef, isWriteMode, () => features.isShowRibbon, () => features.isShowToolbar],
   async () => {
     await nextTick()
     bindHeaderObserver()
@@ -665,15 +658,10 @@ const closeNotificationCenter = () => {
     <!-- Element Plus configuration provider for internationalization -->
     <el-config-provider :locale="elementPlusLocale">
       <div ref="layoutRef" class="ml-cad-layout">
-        <!-- Header section with main menu and language selector -->
+        <!-- Header section with command ribbon -->
         <header v-if="editorRef" ref="headerRef" class="ml-cad-header">
           <ml-ribbon-commands
-            v-if="isWriteMode"
-            :current-locale="effectiveLocale"
-          />
-          <ml-main-menu v-if="!isWriteMode" />
-          <ml-language-selector
-            v-if="!isWriteMode"
+            v-if="features.isShowRibbon"
             :current-locale="effectiveLocale"
           />
         </header>
@@ -691,21 +679,14 @@ const closeNotificationCenter = () => {
           <div
             v-if="
               editorRef &&
-              !isWriteMode &&
+              !features.isShowRibbon &&
               features.isShowFileName &&
-              !isShowToolbar
+              !drawStyleToolbarVisible
             "
             class="ml-file-name"
           >
             {{ displayName }}
           </div>
-
-          <!-- Toolbar for entity draw style -->
-          <ml-entity-draw-style-toolbar
-            v-if="editorRef"
-            :editor="editor"
-            class="ml-rev-tool-bar"
-          />
 
           <!-- Toolbar with common CAD operations (zoom, pan, select, etc.) -->
           <ml-tool-bars v-if="editorRef" />
@@ -810,15 +791,5 @@ const closeNotificationCenter = () => {
   text-align: center;
   pointer-events: none; /* Allow mouse events to pass through to container */
   z-index: 3; /* Ensure it's above canvas but doesn't block events */
-}
-
-/* Position the filename display at the top center of the viewer */
-.ml-rev-tool-bar {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-top: 20px;
-  z-index: 2; /* Ensure it's above canvas but doesn't block events */
 }
 </style>

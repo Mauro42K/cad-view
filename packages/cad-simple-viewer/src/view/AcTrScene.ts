@@ -1,5 +1,6 @@
 import { AcDbObjectId, AcGeBox2d, AcGeBox3d, log } from '@mlightcad/data-model'
 import {
+  AcTrDirectEntityMeta,
   AcTrEntity,
   AcTrEntityPreview,
   AcTrHtmlTransientManager,
@@ -367,6 +368,20 @@ export class AcTrScene {
   }
 
   /**
+   * Applies compare-display coloring to every non-reference layout in the scene.
+   * Overlay/reference layouts must be updated via their own {@link AcTrLayout.setCompareDisplay}.
+   *
+   * @param options - Compare colors and per-entity role overrides.
+   */
+  setCompareDisplay(options: Parameters<AcTrLayout['setCompareDisplay']>[0]) {
+    this._layouts.forEach(layout => {
+      if (!layout.isReference) {
+        layout.setCompareDisplay(options)
+      }
+    })
+  }
+
+  /**
    * Search entities intersected or contained in the specified bounding box.
    * @param box Input the query bounding box
    * @returns Return query results
@@ -387,13 +402,25 @@ export class AcTrScene {
   }
 
   updateLayer(layer: AcEdLayerInfo) {
+    const previous = this._layers.get(layer.name)
+    const wasFrozen = previous?.isFrozen ?? false
     const updatedLayers: AcTrLayer[] = []
     this._layers.set(layer.name, layer)
+    const touchedObjectIds = new Set<string>()
     this._layouts.forEach(layout => {
       const updatedLayer = layout.updateLayer(layer)
       if (updatedLayer) updatedLayers.push(updatedLayer)
+      if (layer.isFrozen && !wasFrozen) {
+        for (const id of layout.applyInsertLayerFreeze(layer.name, true)) {
+          touchedObjectIds.add(id)
+        }
+      } else if (!layer.isFrozen && wasFrozen) {
+        for (const id of layout.applyInsertLayerFreeze(layer.name, false)) {
+          touchedObjectIds.add(id)
+        }
+      }
     })
-    return updatedLayers
+    return { updatedLayers, touchedObjectIds }
   }
 
   /**
@@ -431,18 +458,38 @@ export class AcTrScene {
   }
 
   /**
+   * Show or hide one transient entity already published in this scene.
+   * @returns `true` when the entity exists and visibility was updated.
+   */
+  setTransientEntityVisible(objectId: AcDbObjectId, visible: boolean): boolean {
+    const entity = this._transientManager.get(objectId)
+    if (!entity) return false
+    if (entity.visible === visible) return false
+    entity.visible = visible
+    return true
+  }
+
+  /**
    * Applies world transforms to existing transient entities without reconverting
    * database entities on every cursor move.
+   *
+   * Also forwards matching ids to {@link AcTrHtmlTransientManager} so HTML
+   * overlays receive the same delta as WebGL transients.
+   *
+   * @returns Which renderer layers actually changed, so the view can dirty
+   *   WebGL and CSS2D independently.
    */
   updateTransientPreviewTransforms(
     transforms: ReadonlyArray<{ objectId: AcDbObjectId; matrix: THREE.Matrix4 }>
-  ): boolean {
-    return this._transientManager.applyTransforms(
-      transforms.map(entry => ({
-        id: entry.objectId,
-        matrix: entry.matrix
-      }))
-    )
+  ): { webgl: boolean; html: boolean } {
+    const mapped = transforms.map(entry => ({
+      id: entry.objectId,
+      matrix: entry.matrix
+    }))
+    return {
+      webgl: this._transientManager.applyTransforms(mapped),
+      html: this._htmlTransientManager.applyTransforms(mapped)
+    }
   }
 
   /**
@@ -748,6 +795,27 @@ export class AcTrScene {
     }
 
     return this
+  }
+
+  /**
+   * Adds an entity via direct batch append (no temporary drawable tree).
+   *
+   * @returns `true` when geometry was registered in the target layout.
+   */
+  addDirectEntity(
+    meta: AcTrDirectEntityMeta,
+    extendBbox: boolean = true
+  ): boolean {
+    const ownerId = meta.ownerId
+    if (!ownerId) {
+      log.warn('[AcTrSecene] The owner id of one entity cannot be empty!')
+      return false
+    }
+    let layout = this._layouts.get(ownerId)
+    if (!layout) {
+      layout = this.addEmptyLayout(ownerId)
+    }
+    return layout.addDirectEntity(meta, extendBbox)
   }
 
   /**

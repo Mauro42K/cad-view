@@ -5,7 +5,7 @@ import {
 } from '@mlightcad/data-model'
 import { ShapeData } from '@mlightcad/mtext-renderer'
 
-import { AcTrMTextRenderer } from '../renderer'
+import { AcTrMTextRenderer } from '../renderer/AcTrMTextRenderer'
 import { AcTrRenderContext } from '../renderer/AcTrRenderContext'
 import { resolveShapeGlyphKey, resolveShapeTextStyle } from '../util'
 import { AcTrGlyphEntity } from './AcTrGlyphEntity'
@@ -31,20 +31,20 @@ export class AcTrShape extends AcTrGlyphEntity {
     traits: AcGiSubEntityTraits,
     style: AcGiTextStyle | null | undefined,
     context: AcTrRenderContext,
-    delay: boolean = false
+    _delay: boolean = false
   ) {
     super(context, traits, resolveShapeTextStyle(shape, style, context))
     this._shape = shape
-    if (!delay) {
-      this.syncDraw()
-    }
+    // Geometry is built by syncDraw/asyncDraw in AcTrView2d / AcTrGroup so
+    // font-awaiting asyncDraw can run without blocking other entity converts.
   }
 
   /**
    * Builds renderer input with only the glyph key that should be resolved.
    *
-   * mtext-renderer falls back from shape name to shape number when both are
-   * present; SHAPE entities should use the name exclusively when it is set.
+   * Chooses either a non-numeric name or a shape code via
+   * {@link resolveShapeGlyphKey}, then clears the unused field so mtext-renderer
+   * does not incorrectly fall back between them.
    *
    * @returns SHAPE payload suitable for the mtext-renderer.
    */
@@ -94,5 +94,26 @@ export class AcTrShape extends AcTrGlyphEntity {
     const label =
       this._shape.name?.trim() || String(this._shape.shapeNumber ?? '')
     return `shape '${label}'`
+  }
+
+  /**
+   * Preserves SHAPE payload across INSERT template clones.
+   *
+   * {@link AcTrEntity.fastDeepClone} would otherwise create a plain
+   * {@link AcTrEntity} shell that can no longer {@link asyncDraw} glyphs.
+   */
+  override fastDeepClone(shareGeometry: boolean = false) {
+    const cloned = new AcTrShape(
+      {
+        ...this._shape,
+        position: { ...this._shape.position }
+      },
+      this.traitsForClone(),
+      { ...this._style },
+      this.renderContext
+    )
+    cloned.copyGlyphIdentity(this)
+    this.copyGeometry(this, cloned, shareGeometry)
+    return cloned
   }
 }

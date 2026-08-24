@@ -53,7 +53,7 @@ jest.mock('rbush', () => {
   }
 })
 
-import { AcCmColor } from '@mlightcad/data-model'
+import { AcCmColor, AcGeBox2d } from '@mlightcad/data-model'
 import type { AcTrEntity } from '@mlightcad/three-renderer'
 import * as THREE from 'three'
 
@@ -72,6 +72,12 @@ const mockRemoveEntity = jest.fn()
 const mockAddEntity = jest.fn()
 let lastCapturedExclude: ReadonlySet<string> | undefined
 
+const mockAppendLineGeometry = jest.fn().mockReturnValue(true)
+const mockAppendLine2Geometry = jest.fn().mockReturnValue(true)
+const mockAppendPointGeometry = jest.fn().mockReturnValue(true)
+const mockAppendMeshGeometry = jest.fn().mockReturnValue(true)
+const mockSetCompareDisplay = jest.fn()
+
 jest.mock('@mlightcad/three-renderer', () => {
   const THREE = require('three')
   return {
@@ -84,6 +90,11 @@ jest.mock('@mlightcad/three-renderer', () => {
       group.getEntityVisible = jest.fn()
       group.clear = jest.fn()
       group.computeBoundingBox = mockComputeBoundingBox
+      group.appendLineGeometry = mockAppendLineGeometry
+      group.appendLine2Geometry = mockAppendLine2Geometry
+      group.appendPointGeometry = mockAppendPointGeometry
+      group.appendMeshGeometry = mockAppendMeshGeometry
+      group.setCompareDisplay = mockSetCompareDisplay
       return group
     }),
     AcTrGroup: class AcTrGroup {}
@@ -122,7 +133,50 @@ describe('AcTrLayout bounding box', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockRemoveEntity.mockReturnValue(false)
+    mockAppendLineGeometry.mockReturnValue(true)
+    mockAppendLine2Geometry.mockReturnValue(true)
+    mockAppendPointGeometry.mockReturnValue(true)
+    mockAppendMeshGeometry.mockReturnValue(true)
     lastCapturedExclude = undefined
+  })
+
+  it('registers spatial index for direct line entities', () => {
+    const layout = new AcTrLayout()
+    layout.addLayer(createLayerInfo())
+    const material = new THREE.LineBasicMaterial()
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute([0, 0, 0, 10, 0, 0], 3)
+    )
+
+    const added = layout.addDirectEntity({
+      objectId: 'direct-line-1',
+      ownerId: 'layout-1',
+      layerName: '0',
+      visible: true,
+      kind: 'lineBasic',
+      geometry,
+      material,
+      worldOffset: new THREE.Vector3(5, 0, 0),
+      wcsBbox: new THREE.Box3(
+        new THREE.Vector3(0, -1, 0),
+        new THREE.Vector3(10, 1, 0)
+      )
+    })
+
+    expect(added).toBe(true)
+    expect(mockAppendLineGeometry).toHaveBeenCalled()
+    const query = new AcGeBox2d().set({ x: -1, y: -2 }, { x: 11, y: 2 })
+    const hits = layout.search(query)
+    expect(hits.some(hit => hit.id === 'direct-line-1')).toBe(true)
+
+    mockRemoveEntity.mockReturnValue(true)
+    expect(layout.removeEntity('direct-line-1')).toBe(true)
+    const afterRemove = layout.search(query)
+    expect(afterRemove.some(hit => hit.id === 'direct-line-1')).toBe(false)
+    geometry.dispose()
+    material.dispose()
   })
 
   it('recomputes layout box when a layer is turned off', () => {
@@ -488,5 +542,127 @@ describe('AcTrLayout entity preview helpers', () => {
     expect(
       layout.findPreviewableEntityIds(['line-1', 'line-2', 'missing'])
     ).toEqual(['line-1'])
+  })
+})
+
+describe('AcTrLayout insert layer freeze', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockRemoveEntity.mockReturnValue(false)
+  })
+
+  it('hides other-layer INSERT fragments when the INSERT layer is frozen', () => {
+    const layout = new AcTrLayout()
+    layout.addLayer(createLayerInfo('Wall'))
+    layout.addLayer(createLayerInfo('DIM'))
+
+    const onWall = createEntity('insert-a', 'Wall')
+    onWall.userData.insertLayerName = 'Wall'
+    const onDim = createEntity('insert-a', 'DIM')
+    onDim.userData.insertLayerName = 'Wall'
+    layout.addEntity(onWall)
+    layout.addEntity(onDim)
+
+    const wall = layout.getLayer('Wall')!
+    const dim = layout.getLayer('DIM')!
+    jest.spyOn(wall, 'hasEntity').mockReturnValue(true)
+    jest.spyOn(dim, 'hasEntity').mockReturnValue(true)
+    const dimSetVisible = jest
+      .spyOn(dim, 'setEntityVisible')
+      .mockReturnValue(true)
+    const wallSetVisible = jest
+      .spyOn(wall, 'setEntityVisible')
+      .mockReturnValue(true)
+
+    expect(layout.applyInsertLayerFreeze('Wall', true)).toEqual(['insert-a'])
+    expect(dimSetVisible).toHaveBeenCalledWith('insert-a', false)
+    expect(wallSetVisible).not.toHaveBeenCalled()
+
+    dimSetVisible.mockClear()
+    expect(layout.applyInsertLayerFreeze('Wall', false)).toEqual(['insert-a'])
+    expect(dimSetVisible).toHaveBeenCalledWith('insert-a', true)
+  })
+
+  it('does not hide fragments when freezing a content layer that is not the INSERT layer', () => {
+    const layout = new AcTrLayout()
+    layout.addLayer(createLayerInfo('Wall'))
+    layout.addLayer(createLayerInfo('DIM'))
+
+    const onWall = createEntity('insert-a', 'Wall')
+    onWall.userData.insertLayerName = 'Wall'
+    const onDim = createEntity('insert-a', 'DIM')
+    onDim.userData.insertLayerName = 'Wall'
+    layout.addEntity(onWall)
+    layout.addEntity(onDim)
+
+    const wall = layout.getLayer('Wall')!
+    const dim = layout.getLayer('DIM')!
+    jest.spyOn(wall, 'hasEntity').mockReturnValue(true)
+    jest.spyOn(dim, 'hasEntity').mockReturnValue(true)
+    const wallSetVisible = jest
+      .spyOn(wall, 'setEntityVisible')
+      .mockReturnValue(true)
+
+    expect(layout.applyInsertLayerFreeze('DIM', true)).toEqual([])
+    expect(wallSetVisible).not.toHaveBeenCalled()
+  })
+
+  it('hides a sole other-layer INSERT fragment when the INSERT layer is frozen', () => {
+    // INSERT on Wall with nested content only on DIM (no Wall bucket).
+    const layout = new AcTrLayout()
+    layout.addLayer(createLayerInfo('Wall'))
+    layout.addLayer(createLayerInfo('DIM'))
+
+    const onDim = createEntity('insert-a', 'DIM')
+    onDim.userData.insertLayerName = 'Wall'
+    layout.addEntity(onDim)
+
+    const dim = layout.getLayer('DIM')!
+    jest.spyOn(dim, 'hasEntity').mockReturnValue(true)
+    const dimSetVisible = jest
+      .spyOn(dim, 'setEntityVisible')
+      .mockReturnValue(true)
+
+    expect(layout.applyInsertLayerFreeze('Wall', true)).toEqual(['insert-a'])
+    expect(dimSetVisible).toHaveBeenCalledWith('insert-a', false)
+
+    dimSetVisible.mockClear()
+    expect(layout.applyInsertLayerFreeze('Wall', false)).toEqual(['insert-a'])
+    expect(dimSetVisible).toHaveBeenCalledWith('insert-a', true)
+  })
+
+  it('no-ops when the INSERT only has a fragment on its own layer', () => {
+    const layout = new AcTrLayout()
+    layout.addLayer(createLayerInfo('Wall'))
+
+    const onWall = createEntity('insert-a', 'Wall')
+    onWall.userData.insertLayerName = 'Wall'
+    layout.addEntity(onWall)
+
+    const wall = layout.getLayer('Wall')!
+    jest.spyOn(wall, 'hasEntity').mockReturnValue(true)
+    const wallSetVisible = jest
+      .spyOn(wall, 'setEntityVisible')
+      .mockReturnValue(true)
+
+    expect(layout.applyInsertLayerFreeze('Wall', true)).toEqual([])
+    expect(wallSetVisible).not.toHaveBeenCalled()
+  })
+
+  it('replays compare-display options onto layers created after setCompareDisplay', () => {
+    mockSetCompareDisplay.mockClear()
+    const layout = new AcTrLayout()
+    layout.addLayer(createLayerInfo('0'))
+    const options = {
+      enabled: true,
+      baseColor: 0x9ca3af,
+      overrides: [{ objectId: '926', role: 'added' as const }]
+    }
+    layout.setCompareDisplay(options)
+    expect(mockSetCompareDisplay).toHaveBeenCalledWith(options)
+
+    mockSetCompareDisplay.mockClear()
+    layout.addLayer(createLayerInfo('NEW'))
+    expect(mockSetCompareDisplay).toHaveBeenCalledWith(options)
   })
 })

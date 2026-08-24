@@ -29,6 +29,8 @@ const config: Config = {
   ],
   moduleNameMapper: {
     '^lodash-es$': 'lodash',
+    '^@mlightcad/cad-simple-viewer/icons$':
+      '<rootDir>/packages/cad-simple-viewer/src/ui/icons.ts',
     '^three/examples/jsm/lines/LineMaterial\\.js$':
       '<rootDir>/test/mocks/three/LineMaterial.js',
     '^three/examples/jsm/lines/LineSegments2\\.js$':
@@ -40,9 +42,7 @@ const config: Config = {
     '^three/examples/jsm/utils/BufferGeometryUtils\\.js$':
       '<rootDir>/test/mocks/three/BufferGeometryUtils.js',
     '^three/examples/jsm/controls/OrbitControls(\\.js)?$':
-      '<rootDir>/test/mocks/three/OrbitControls.js',
-    '^pdfjs-dist/build/pdf\\.worker\\.mjs\\?url$':
-      '<rootDir>/test/mocks/pdfjs-worker-url.js'
+      '<rootDir>/test/mocks/three/OrbitControls.js'
   }
 }
 

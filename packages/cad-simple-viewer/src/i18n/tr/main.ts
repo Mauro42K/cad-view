@@ -20,6 +20,9 @@ export default {
   },
   message: {
     fetchingDrawingFile: 'Dosya alınıyor ...',
+    exportingDxf: 'DXF dışa aktarılıyor ...',
+    exportingEntityPreview: 'Görüntü dışa aktarılıyor ...',
+    collectingMemoryProfile: 'Bellek analiz ediliyor ...',
     fontCached: 'Yazı tipi başarıyla önbelleğe alındı',
     fontCacheFailed: 'Yazı tipi önbelleğe alınamadı'
   },
@@ -37,6 +40,23 @@ export default {
     block: 'Bloklar ayrıştırılıyor ...',
     entity: 'Nesneler ayrıştırılıyor ...',
     object: 'Adlandırılmış sözlükler ayrıştırılıyor ...',
+    rendering: 'Çizim render ediliyor ...',
     end: 'Tamamlandı!'
+  },
+  about: {
+    title: 'Hakkında',
+    close: 'Kapat',
+    product: 'CAD Viewer',
+    tagline: 'DWG ve DXF çizimleri için yüksek performanslı web CAD görüntüleyici.',
+    website: 'Web sitesi',
+    docs: 'Belgeler',
+    repository: 'GitHub',
+    copyright: '© {year} mlightcad. Tüm hakları saklıdır.',
+    ok: 'Tamam'
+  },
+  drawStyle: {
+    color: 'Renk',
+    lineWeight: 'Çizgi kalınlığı',
+    fontSize: 'Yazı yüksekliği'
   }
 }

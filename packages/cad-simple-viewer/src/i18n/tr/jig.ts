@@ -661,7 +661,10 @@ export default {
   measureArc: {
     startPoint: 'Yayın başlangıç noktasını belirtin',
     throughPoint: 'Yay üzerinde bir nokta belirtin',
-    endPoint: 'Yayın bitiş noktasını belirtin'
+    endPoint: 'Yayın bitiş noktasını belirtin',
+    lockedEndPoint:
+      'Yayın bitiş noktasını belirtin (Ctrl ile büyük/küçük yay arasında geçiş)',
+    invalidPoints: 'Üç nokta doğrusal ve bir yay tanımlamıyor.'
   },
   measureArea: {
     firstPoint: 'İlk noktayı belirtin',
@@ -670,6 +673,76 @@ export default {
   measureDistance: {
     firstPoint: 'İlk noktayı belirtin',
     secondPoint: 'İkinci noktayı belirtin'
+  },
+  measurePoint: {
+    point: 'Noktayı belirtin'
+  },
+  measurement: {
+    import: {
+      chooseFile: 'Bir ölçüm sidecar JSON dosyası seçin'
+    }
+  },
+  markup: {
+    author: 'İnceleme yazarını belirtin (sonraki kullanımlar için kaydedilir)',
+    text: {
+      point: 'Metin işaretinin noktasını belirtin',
+      content: 'İşaret metnini girin'
+    },
+    line: {
+      firstPoint: 'Çizgi işaretinin ilk noktasını belirtin',
+      secondPoint: 'Çizgi işaretinin ikinci noktasını belirtin'
+    },
+    arrow: {
+      firstPoint: 'Okun başlangıç noktasını belirtin',
+      secondPoint: 'Ok ucunu belirtin'
+    },
+    cloud: {
+      firstCorner: 'Bulutun ilk köşesini belirtin',
+      secondCorner: 'Bulutun karşı köşesini belirtin'
+    },
+    rect: {
+      firstCorner: 'Dikdörtgenin ilk köşesini belirtin',
+      secondCorner: 'Dikdörtgenin karşı köşesini belirtin'
+    },
+    circle: {
+      center: 'Dairenin merkezini belirtin',
+      radius: 'Dairenin yarıçapını belirtin'
+    },
+    shape: {
+      calloutOn: '[Çağrı açık]',
+      calloutOff: '[Çağrı kapalı]',
+      calloutAnchor: 'Çağrı metninin konumunu belirtin',
+      keywords: {
+        callout: {
+          display: 'Çağrı(C)',
+          local: 'Çağrı',
+          global: 'Callout'
+        },
+        noCallout: {
+          display: 'ÇağrıYok(N)',
+          local: 'ÇağrıYok',
+          global: 'NoCallout'
+        }
+      }
+    },
+    highlight: {
+      firstCorner: 'Vurgu dikdörtgeninin ilk köşesini belirtin',
+      secondCorner: 'Vurgu dikdörtgeninin karşı köşesini belirtin'
+    },
+    callout: {
+      tip: 'Lider ucunu veya çağrısı olmayan bulut/dikdörtgen/daire dış çerçevesini belirtin',
+      anchor: 'Çağrı metninin konumunu belirtin',
+      content: 'Çağrı metnini girin'
+    },
+    stamp: {
+      kind: 'Damga kimliğini girin [approved/rejected/revised/for-review/custom]',
+      imageUrl: 'Özel damga görüntüsü URL’sini girin (isteğe bağlı)',
+      caption: 'Damga açıklamasını girin (isteğe bağlı)',
+      point: 'Damga ekleme noktasını belirtin'
+    },
+    import: {
+      chooseFile: 'Bir işaret sidecar JSON dosyası seçin'
+    }
   },
   move: {
     basePointOrDisplacement: 'Temel noktayı belirtin veya',
@@ -698,6 +771,32 @@ export default {
     boundsFirstCorner: 'Sınırların ilk köşesini belirtin',
     boundsSecondCorner: 'Karşı köşeyi belirtin',
     longSidePrompt: 'Uzun kenar boyutunu piksel olarak girin'
+  },
+  imageattach: {
+    insertionPoint: 'Ekleme noktasını belirtin:',
+    scale: 'Ölçek faktörünü belirtin:',
+    rotation: 'Döndürme açısını belirtin:',
+    invalidScale: 'Ölçek faktörü 0 dan büyük olmalıdır.',
+    decodeFailed: 'Seçilen görüntü dosyası okunamadı.'
+  },
+  insert: {
+    blockName: 'Blok adını girin:',
+    insertionPoint: 'Ekleme noktasını belirtin:',
+    scale: 'Ölçek faktörünü belirtin:',
+    rotation: 'Döndürme açısını belirtin:',
+    invalidScale: 'Ölçek faktörü 0 dan büyük olmalıdır.',
+    invalidBlockName: 'Geçersiz blok adı.',
+    blockNotFound: 'Blok bulunamadı',
+    xrefNotAllowed: 'Harici referans -INSERT ile eklenemez.'
+  },
+  xattach: {
+    insertionPoint: 'Ekleme noktasını belirtin:',
+    scale: 'Ölçek faktörünü belirtin:',
+    rotation: 'Döndürme açısını belirtin:',
+    invalidScale: 'Ölçek faktörü 0 dan büyük olmalıdır.',
+    unsupportedFile: 'Lütfen bir DWG veya DXF dosyası seçin.',
+    loading: 'Harici referans yükleniyor...',
+    loadFailed: 'Seçilen çizim dosyası okunamadı.'
   },
   point: {
     point: 'Bir nokta belirtin'
@@ -887,9 +986,120 @@ export default {
       referencePoints: 'Geçersiz referans noktaları: noktalar farklı olmalıdır.'
     }
   },
-  sketch: {
+  revcloud: {
+    firstCornerOrOptions: 'İlk köşe noktasını belirtin veya',
+    firstCorner: 'İlk köşe noktasını belirtin',
+    oppositeCorner: 'Karşı köşeyi belirtin',
+    startPoint: 'Başlangıç noktasını belirtin',
+    nextPoint: 'Sonraki noktayı belirtin',
+    nextPointOrUndo: 'Sonraki noktayı belirtin veya',
     firstPoint: 'İlk noktayı belirtin',
-    nextPoint: 'Bitiş noktasını belirtin'
+    guideCursor: 'İmleci bulut yolu boyunca götürün (bitirmek için Enter)',
+    arcLength: 'Yay uzunluğunu belirtin',
+    selectObject: 'Nesne seçin',
+    style: 'Revizyon bulutu yay stilini girin',
+    reverseDirection: 'Yönü ters çevir',
+    invalidArcLength: 'Yay uzunluğu 0\'dan büyük olmalıdır.',
+    invalidObject: 'Seçilen nesne revizyon bulutuna dönüştürülemez.',
+    keywords: {
+      arcLength: {
+        display: 'Yay uzunluğu(A)',
+        local: 'Yay uzunluğu',
+        global: 'ArcLength'
+      },
+      object: {
+        display: 'Nesne(O)',
+        local: 'Nesne',
+        global: 'Object'
+      },
+      rectangular: {
+        display: 'Dikdörtgen(R)',
+        local: 'Dikdörtgen',
+        global: 'Rectangular'
+      },
+      polygonal: {
+        display: 'Çokgen(P)',
+        local: 'Çokgen',
+        global: 'Polygonal'
+      },
+      freehand: {
+        display: 'Serbest(F)',
+        local: 'Serbest',
+        global: 'Freehand'
+      },
+      style: {
+        display: 'Stil(S)',
+        local: 'Stil',
+        global: 'Style'
+      },
+      normal: {
+        display: 'Normal(N)',
+        local: 'Normal',
+        global: 'Normal'
+      },
+      calligraphy: {
+        display: 'Kaligrafi(C)',
+        local: 'Kaligrafi',
+        global: 'Calligraphy'
+      },
+      undo: {
+        display: 'Geri al(U)',
+        local: 'Geri al',
+        global: 'Undo'
+      },
+      yes: {
+        display: 'Evet(Y)',
+        local: 'Evet',
+        global: 'Yes'
+      },
+      no: {
+        display: 'Hayır(N)',
+        local: 'Hayır',
+        global: 'No'
+      }
+    }
+  },
+  sketch: {
+    specifySketch: 'Eskizi belirtin veya',
+    sketching:
+      'Eskiz için işaretçiyi hareket ettirin (durdurmak için tıklayın veya Enter)',
+    type: 'Eskiz türünü girin',
+    increment: 'Eskiz artışını belirtin',
+    tolerance: 'Spline toleransını belirtin',
+    firstPoint: 'İlk noktayı belirtin',
+    nextPoint: 'Bitiş noktasını belirtin',
+    keywords: {
+      type: {
+        display: 'Tür(T)',
+        local: 'Tür',
+        global: 'Type'
+      },
+      increment: {
+        display: 'Artış(I)',
+        local: 'Artış',
+        global: 'Increment'
+      },
+      tolerance: {
+        display: 'toLerance(L)',
+        local: 'toLerance',
+        global: 'Tolerance'
+      },
+      line: {
+        display: 'Çizgiler(L)',
+        local: 'Çizgiler',
+        global: 'Lines'
+      },
+      polyline: {
+        display: 'Çoklu çizgi(P)',
+        local: 'Çoklu çizgi',
+        global: 'Polyline'
+      },
+      spline: {
+        display: 'Spline(S)',
+        local: 'Spline',
+        global: 'Spline'
+      }
+    }
   },
   spline: {
     firstPoint: 'İlk noktayı belirtin',
@@ -998,6 +1208,7 @@ export default {
   },
   chtml: {
     exportInvisibleLayers: 'Görünmez katmanları dışa aktar',
+    exportLayouts: 'Yerleşimleri dışa aktar',
     initialView: 'HTML açılırken başlangıç görünümü',
     viewerMode: 'Çevrimdışı görüntüleyici modu',
     keywords: {
@@ -1027,8 +1238,8 @@ export default {
         global: 'View'
       },
       measure: {
-        display: 'Ölç(Ö)',
-        local: 'Ölç',
+        display: 'Ölçüm ve İnceleme(Ö)',
+        local: 'Ölçüm ve İnceleme',
         global: 'Measure'
       }
     }

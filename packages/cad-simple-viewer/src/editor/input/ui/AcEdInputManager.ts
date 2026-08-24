@@ -135,6 +135,14 @@ export class AcEdInputManager {
    * (getEntity/getSelection). Used to gate view-level selection behavior.
    */
   private entitySelectionActive: boolean = false
+  /**
+   * Rejector of the currently active prompt session, used by
+   * {@link cancelActiveInput} to programmatically abort the prompt.
+   *
+   * Prompt sessions never nest (composite prompts such as {@link getBox} chain
+   * their sub-prompts sequentially), so a single slot is sufficient.
+   */
+  private _activeRejector: ((err?: Error) => void) | null = null
 
   /**
    * Construct the manager and attach mousemove listener used for floating input
@@ -193,6 +201,24 @@ export class AcEdInputManager {
   }
 
   /**
+   * Programmatically cancels the currently active prompt session, if any.
+   *
+   * This is the external counterpart of pressing Escape during a prompt: it
+   * rejects the active prompt promise with the canonical `'cancelled'` error,
+   * which prompt wrappers map to {@link AcEdPromptStatus.Cancel}. Commands
+   * waiting on `getPoint()` / `getDistance()` / etc. therefore observe the
+   * cancellation as a normal Cancel-status result and clean up naturally.
+   *
+   * Calling this method when no prompt is active is a no-op.
+   */
+  cancelActiveInput() {
+    const rejector = this._activeRejector
+    if (!rejector) return
+    this._activeRejector = null
+    rejector()
+  }
+
+  /**
    * Queue scripted inputs for subsequent getXXX calls.
    * One array item equals one Enter-confirmed value.
    */
@@ -204,6 +230,24 @@ export class AcEdInputManager {
   /** Clears any pending scripted inputs. */
   clearScriptInputs() {
     this._scriptInputs.length = 0
+  }
+
+  /** Returns whether any scripted inputs remain queued. */
+  hasScriptInputs() {
+    return this._scriptInputs.length > 0
+  }
+
+  /**
+   * Removes and returns all remaining scripted inputs.
+   *
+   * Used by multi-command script runners that need to inspect leftovers after
+   * a command finishes without clearing the queue mid-run.
+   */
+  drainScriptInputs() {
+    if (!this._scriptInputs.length) {
+      return [] as string[]
+    }
+    return this._scriptInputs.splice(0, this._scriptInputs.length)
   }
 
   /**
@@ -334,6 +378,8 @@ export class AcEdInputManager {
   ): AcEdPromptKeywordOptions {
     const keywordOptions = new AcEdPromptKeywordOptions(options.message)
     keywordOptions.appendKeywordsToMessage = options.appendKeywordsToMessage
+    keywordOptions.valueDefaultDisplayText =
+      options.getDefaultValueDisplayText()
 
     const keywords = options.keywords?.toArray() ?? []
     keywords.forEach(kw => {
@@ -1041,14 +1087,44 @@ export class AcEdInputManager {
           return scriptedValue
         }
 
-        const result = await this._commandLine.getKeywords(options, true)
-        if (!result) {
-          if (options.allowNone) {
-            throw new AcEdNoneInputError()
+        return new Promise<string>((resolve, reject) => {
+          // Register a rejector so `cancelActiveInput()` (called by the
+          // command dispatcher when a new command pre-empts the running one)
+          // can abort this keyword-only prompt the same way ESC would.
+          const rejector = (err?: Error) => {
+            if (this._activeRejector === rejector) {
+              this._activeRejector = null
+            }
+            // Tear down the floating command-line keyword session so its
+            // input box and event listeners do not linger after cancel.
+            this._commandLine.cancelActiveSession()
+            reject(err ?? new Error('cancelled'))
           }
-          throw new Error('cancelled')
-        }
-        return result
+          this._activeRejector = rejector
+
+          this._commandLine.getKeywords(options, true).then(
+            result => {
+              if (this._activeRejector === rejector) {
+                this._activeRejector = null
+              }
+              if (!result) {
+                reject(
+                  options.allowNone
+                    ? new AcEdNoneInputError()
+                    : new Error('cancelled')
+                )
+                return
+              }
+              resolve(result)
+            },
+            err => {
+              if (this._activeRejector === rejector) {
+                this._activeRejector = null
+              }
+              reject(err)
+            }
+          )
+        })
       },
       value => new AcEdPromptResult(AcEdPromptStatus.OK, value),
       status => new AcEdPromptResult(status),
@@ -1147,11 +1223,18 @@ export class AcEdInputManager {
           }
 
           let settled = false
+          const rejector = (err?: Error) => {
+            cleanup()
+            reject(err ?? new Error('cancelled'))
+          }
           const cleanup = () => {
             if (settled) return
             settled = true
             this.active = false
             this.entitySelectionActive = false
+            if (this._activeRejector === rejector) {
+              this._activeRejector = null
+            }
             floatingMessage?.dispose()
             previewEl?.remove()
             keywordSession?.cancel()
@@ -1168,24 +1251,22 @@ export class AcEdInputManager {
             this.view.events.viewChanged.removeEventListener(onViewChanged)
             this.view.events.viewResize.removeEventListener(onViewChanged)
           }
+          this._activeRejector = rejector
 
           keywordSession?.promise.then(keyword => {
             if (settled) return
             if (!keyword) {
-              cleanup()
-              reject(new Error('cancelled'))
+              rejector()
               return
             }
-            cleanup()
-            reject(new AcEdKeywordInputError(keyword))
+            rejector(new AcEdKeywordInputError(keyword))
           })
 
           /** ---------- Keyboard ---------- */
 
           const keyHandler = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-              cleanup()
-              reject(new Error('cancelled'))
+              rejector()
               return
             }
 
@@ -1331,11 +1412,18 @@ export class AcEdInputManager {
             this._commandLine.setPrompt(options.message)
           }
           let settled = false
+          const rejector = (err?: Error) => {
+            cleanup()
+            reject(err ?? new Error('cancelled'))
+          }
           const cleanup = () => {
             if (settled) return
             settled = true
             this.active = false
             this.entitySelectionActive = false
+            if (this._activeRejector === rejector) {
+              this._activeRejector = null
+            }
             options.jig?.end()
             document.removeEventListener('keydown', keyHandler)
             this.view.canvas.removeEventListener('mousedown', mouseDownHandler)
@@ -1348,16 +1436,15 @@ export class AcEdInputManager {
             keywordSession?.cancel()
             this._commandLine.clear()
           }
+          this._activeRejector = rejector
 
           keywordSession?.promise.then(keyword => {
             if (settled) return
             if (!keyword) {
-              cleanup()
-              reject(new Error('cancelled'))
+              rejector()
               return
             }
-            cleanup()
-            reject(new AcEdKeywordInputError(keyword))
+            rejector(new AcEdKeywordInputError(keyword))
           })
 
           const mouseDownHandler = (e: MouseEvent) => {
@@ -1413,8 +1500,7 @@ export class AcEdInputManager {
           /** Keyboard handling */
           const keyHandler = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-              cleanup()
-              reject(new Error('cancelled'))
+              rejector()
               return
             }
 
@@ -1470,6 +1556,7 @@ export class AcEdInputManager {
         options1.useDashedLine = options.useDashedLine
         options1.useBasePoint = options.useBasePoint
         options1.disableOSnap = options.disableOSnap
+        options1.allowNone = options.allowNone
         const p1Result = await this.getPoint(options1)
         if (p1Result.status !== AcEdPromptStatus.OK) {
           return new AcEdPromptBoxResult(
@@ -1836,7 +1923,7 @@ export class AcEdInputManager {
     const baseAngle = hasBaseAngle ? (options.baseAngle as number) : undefined
 
     return {
-      message: options.message,
+      message: options.getDisplayMessage(),
       jig: options.jig,
       basePoint,
       useBasePoint,
@@ -1953,6 +2040,9 @@ export class AcEdInputManager {
         settled = true
         this.active = false
         this.entitySelectionActive = false
+        if (this._activeRejector === rejector) {
+          this._activeRejector = null
+        }
         options.cleanup?.()
         promptDefaults.jig?.end()
         document.removeEventListener('keydown', escHandler)
@@ -1973,6 +2063,8 @@ export class AcEdInputManager {
         cleanup()
         reject(err ?? new Error('cancelled'))
       }
+
+      this._activeRejector = rejector
 
       const noneRejector = () => {
         rejector(new AcEdNoneInputError())

@@ -7,6 +7,12 @@ export default {
     '-layer': {
       description: 'Komut satırı seçenekleriyle katmanları yönetir'
     },
+    about: {
+      description: 'mlightcad hakkında bilgi gösterir'
+    },
+    acadver: {
+      description: 'Çizim veritabanı sürüm tanımlayıcısını saklar (salt okunur)'
+    },
     angbase: {
       description: 'Geçerli KKS\'ye göre 0 açı temel yönünü ayarlar'
     },
@@ -45,7 +51,7 @@ export default {
       description:
         'Yeni oluşturulan nesneler için varsayılan çizgi kalınlığını ayarlar'
     },
-    cetranparency: {
+    cetransparency: {
       description: 'Yeni oluşturulan nesneler için saydamlığı ayarlar'
     },
     cachefont: {
@@ -90,6 +96,15 @@ export default {
     dimlinear: {
       description: 'Doğrusal ölçülendirmeler oluşturur'
     },
+    dimstyle: {
+      description: 'Geçerli ölçülendirme stilinin adını ayarlar'
+    },
+    dwgname: {
+      description: 'Geçerli çizim dosyasının adını saklar (salt okunur)'
+    },
+    loginname: {
+      description: 'Kullanıcının oturum açma adını görüntüler (salt okunur)'
+    },
     dynmode: {
       description: 'İmleçteki Dinamik Girdi ayarlarını denetler'
     },
@@ -105,6 +120,14 @@ export default {
       description: 'Seçili varlıkları çizimden siler',
       prompt: 'Varlıkları seçin'
     },
+    extmax: {
+      description:
+        'Model alanı çizim kapsamının sağ üst köşesini saklar (salt okunur)'
+    },
+    extmin: {
+      description:
+        'Model alanı çizim kapsamının sol alt köşesini saklar (salt okunur)'
+    },
     entout: {
       description:
         'Seçili varlıklar için birleştirilmiş bir önizleme görüntüsü dışa aktarır',
@@ -113,6 +136,17 @@ export default {
     hideobjects: {
       description: 'Seçili nesnelerin görüntülenmesini geçici olarak gizler',
       prompt: 'Nesneleri seçin'
+    },
+    imageattach: {
+      description:
+        'Geçerli çizime harici başvuru olarak bir raster görüntü ekler'
+    },
+    '-insert': {
+      description: 'Bir blok tanımını geçerli çizime ekler (komut satırı)'
+    },
+    xattach: {
+      description:
+        'Geçerli çizime harici başvuru olarak bir DWG veya DXF çizimi ekler'
     },
     gripcolor: {
       description:
@@ -237,6 +271,9 @@ export default {
     log: {
       description: 'Hata ayıklama bilgilerini konsola kaydeder'
     },
+    ltscale: {
+      description: 'Çizim için genel çizgi tipi ölçek faktörünü ayarlar'
+    },
     lunits: {
       description: 'Koordinatlar ve mesafeler için görüntüleme biçimini ayarlar'
     },
@@ -249,7 +286,16 @@ export default {
         'Çizgi kalınlıklarının çizimde görüntülenip görüntülenmeyeceğini denetler'
     },
     clearmeasurements: {
-      description: 'Görünümdeki tüm etkin ölçümleri kaldırır'
+      description: 'Geçerli yerleşimdeki tüm ölçümleri kaldırır'
+    },
+    measurementvis: {
+      description: 'Geçerli yerleşimdeki ölçümleri gösterir veya gizler'
+    },
+    measurementexport: {
+      description: 'Ölçümleri sidecar JSON dosyasına dışa aktarır'
+    },
+    measurementimport: {
+      description: 'Ölçümleri sidecar JSON dosyasından içe aktarır'
     },
     measurearea: {
       description:
@@ -264,12 +310,18 @@ export default {
     measuredistance: {
       description: 'İki nokta arasındaki mesafeyi ve delta değerlerini ölçer'
     },
+    measurepoint: {
+      description: 'Seçilen noktanın X/Y koordinatlarını ölçer'
+    },
     measurement: {
       description:
         'Çizimin İngiliz (emperyal) birimlerini mi yoksa metrik birimleri mi kullanacağını ayarlar'
     },
     measurementcolor: {
       description: 'Ölçüm katmanları için kullanılan rengi ayarlar'
+    },
+    modelbkcolor: {
+      description: 'Model alanı çizim alanının arka plan rengini ayarlar'
     },
     mline: {
       description:
@@ -289,6 +341,16 @@ export default {
     open: {
       description: 'Mevcut bir çizim dosyasını açar'
     },
+    openprof: {
+      description:
+        'Dosya açma aşaması zamanlama profillerinin konsola kaydedilip kaydedilmeyeceğini denetler'
+    },
+    openperf: {
+      description: 'Son çizim açılışının zamanlamalarını Open Performance paletinde gösterir'
+    },
+    orthomode: {
+      description: 'İmleç hareketini yatay veya dikey eksenle sınırlar'
+    },
     osmode: {
       description:
         'Bit kodu değeri kullanarak çalışan Nesne Yakalama modlarını ayarlar'
@@ -296,6 +358,16 @@ export default {
     pan: {
       description:
         'Görüntüleme yönünü veya büyütmeyi değiştirmeden görünümü kaydırır'
+    },
+    paperbkcolor: {
+      description:
+        'Kağıt alanı (düzen) çizim alanının arka plan rengini ayarlar'
+    },
+    pdmode: {
+      description: 'POINT varlıklarının nasıl görüntüleneceğini denetler'
+    },
+    pdsize: {
+      description: 'POINT varlıkları için görüntüleme boyutunu ayarlar'
     },
     pickbox: {
       description:
@@ -310,12 +382,25 @@ export default {
     point: {
       description: 'Noktalar oluşturur'
     },
+    polaraddang: {
+      description:
+        'Ek kutupsal izleme açılarını noktalı virgülle ayrılmış liste olarak saklar'
+    },
+    polarang: {
+      description: 'Kutupsal izleme için kutupsal açı artımını ayarlar'
+    },
+    polarmode: {
+      description: 'Kutupsal ve nesne yakalama izleme ayarlarını denetler'
+    },
     polygon: {
       description:
         'Merkez/yarıçapa veya bir çokgen kenarına göre düzgün bir çokgen oluşturur'
     },
     qnew: {
       description: 'Yeni bir çizim başlatır'
+    },
+    close: {
+      description: 'Geçerli çizimi kapatır'
     },
     ray: {
       description: 'Bir noktadan başlayıp sonsuza uzanan bir ışın oluşturur'
@@ -327,8 +412,50 @@ export default {
       description: 'Geçerli çizimi yeniden çizer'
     },
     revcloud: {
+      description: 'Revizyon bulutu oluşturur veya değiştirir'
+    },
+    markuptext: {
+      description: 'Metin işareti yerleştirir'
+    },
+    markupline: {
+      description: 'Çizgi işareti oluşturur'
+    },
+    markuparrow: {
+      description: 'Ok işareti oluşturur'
+    },
+    markupcloud: {
+      description: 'Revizyon bulutu işareti oluşturur'
+    },
+    markuprect: {
+      description: 'Dikdörtgen işareti oluşturur'
+    },
+    markupcircle: {
+      description: 'Daire işareti oluşturur'
+    },
+    markuphighlight: {
+      description: 'Vurgu dikdörtgeni işareti oluşturur'
+    },
+    markupcallout: {
       description:
-        'Dikdörtgen şeklinde bir revizyon bulutu (bulut çizgisi) oluşturur'
+        'Çağrı notu oluşturur: önce lider ucunu, sonra metin kutusunu belirtin, ardından metni girin'
+    },
+    markupstamp: {
+      description: 'Damga veya özel sembol yerleştirir'
+    },
+    markupvis: {
+      description: 'İşaretleri gösterir veya gizler'
+    },
+    clearmarkups: {
+      description: 'Geçerli yerleşimdeki tüm işaretleri temizler'
+    },
+    markupexport: {
+      description: 'İşaretleri sidecar JSON dosyasına dışa aktarır'
+    },
+    markupimport: {
+      description: 'İşaretleri sidecar JSON dosyasından içe aktarır'
+    },
+    markuppanel: {
+      description: 'İşaret paletini açar'
     },
     rotate: {
       description: 'Seçili varlıkları bir taban noktası etrafında döndürür',
@@ -342,8 +469,7 @@ export default {
         'Çizim alanındaki kısayol menülerinin kullanılabilirliğini denetler'
     },
     sketch: {
-      description:
-        'Fare hareketini izleyen çoklu çizgi kullanarak bir taslak çizgi oluşturur'
+      description: 'Bir dizi serbest el çizgi parçası oluşturur'
     },
     spline: {
       description:

@@ -6,7 +6,7 @@ import { AcEdCommandStack } from '../editor'
  * Language/locale id used in the application.
  * Matches the naming style used by vue-i18n ("Locale").
  */
-export type AcApLocale = 'en' | 'zh' | 'tr'
+export type AcApLocale = 'en' | 'zh' | 'tr' | 'cs' | 'ar'
 
 /**
  * A single locale message tree.
@@ -54,7 +54,9 @@ export class AcApI18n {
   private static _messages: AcApLocaleMessages = {
     en: {},
     zh: {},
-    tr: {}
+    tr: {},
+    cs: {},
+    ar: {}
   }
 
   /**

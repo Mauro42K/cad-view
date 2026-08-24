@@ -1,15 +1,16 @@
 import {
   AcApDocManager,
   AcApEntityPreviewConvertor,
-  AcTrView2d,
-  yieldToMain
+  AcTrView2d
 } from '@mlightcad/cad-simple-viewer'
-import type { AcDbObjectId } from '@mlightcad/data-model'
+import {
+  accmYieldForPaint,
+  type AcDbObjectId
+} from '@mlightcad/data-model'
 
 /** Default preview long side in pixels for drawing verification. */
 export const VERIFICATION_PREVIEW_LONG_SIDE_PX = 1024
 
-const SCENE_READY_POLL_MS = 50
 const SCENE_READY_TIMEOUT_MS = 15000
 
 /** Collects all entity object ids in model space. */
@@ -31,17 +32,9 @@ export async function waitForDrawingSceneReady(
     return false
   }
 
-  const deadline = Date.now() + timeoutMs
-  while (view.isProcessingEntities) {
-    if (Date.now() > deadline) {
-      return false
-    }
-    await yieldToMain()
-    await new Promise(resolve => setTimeout(resolve, SCENE_READY_POLL_MS))
-  }
-
-  await yieldToMain()
-  return true
+  const idle = await view.waitUntilIdle(timeoutMs)
+  await accmYieldForPaint()
+  return idle
 }
 
 /**

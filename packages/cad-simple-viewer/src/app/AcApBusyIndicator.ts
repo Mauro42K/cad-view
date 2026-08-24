@@ -1,5 +1,6 @@
+import { accmYieldForPaint } from '@mlightcad/data-model'
+
 import { eventBus } from '../editor'
-import { yieldToMain } from '../util/yieldToMain'
 import { AcApProgress } from './AcApProgress'
 
 /**
@@ -19,6 +20,15 @@ export class AcApBusyIndicator {
   constructor(host: HTMLElement) {
     this._progress = new AcApProgress({ host })
     this._progress.hide()
+  }
+
+  /**
+   * Moves the overlay onto another host (e.g. the focused split pane).
+   *
+   * @param host - New parent element for the overlay.
+   */
+  setHost(host: HTMLElement): void {
+    this._progress.setHost(host)
   }
 
   /**
@@ -86,7 +96,7 @@ export class AcApBusyIndicator {
   ): Promise<T> {
     this.show(message)
     try {
-      await yieldToMain()
+      await accmYieldForPaint()
       return await work()
     } finally {
       this.hide()

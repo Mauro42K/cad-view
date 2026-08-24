@@ -8,7 +8,7 @@ import { ColorSettings, MTextObject } from '@mlightcad/mtext-renderer'
 import * as THREE from 'three'
 
 import type { AcTrDrawMode } from '../draw/AcTrDrawMode'
-import { AcTrMTextRenderer } from '../renderer'
+import { AcTrMTextRenderer } from '../renderer/AcTrMTextRenderer'
 import { AcTrRenderContext } from '../renderer/AcTrRenderContext'
 import {
   AcTrMTextColorUtil,
@@ -174,6 +174,27 @@ export abstract class AcTrGlyphEntity extends AcTrEntity {
   }
 
   /**
+   * Traits snapshot suitable for reconstructing this glyph via its constructor.
+   */
+  protected traitsForClone(): AcGiSubEntityTraits {
+    return {
+      ...AcTrSubEntityTraitsUtil.createDefaultTraits(),
+      color: this._entityTraits.color,
+      layer: this._entityTraits.layer
+    }
+  }
+
+  /**
+   * Copies shared glyph state after a subclass constructs a typed clone shell.
+   */
+  protected copyGlyphIdentity(source: AcTrGlyphEntity) {
+    this.copy(source, false)
+    this._style = { ...source._style }
+    this._entityTraits = { ...source._entityTraits }
+    this._colorSettings = { ...source._colorSettings }
+  }
+
+  /**
    * Gets intersections between a casted ray and this glyph entity.
    *
    * The mtext renderer provides a logical hit-test when its cached layout is
@@ -242,6 +263,14 @@ export abstract class AcTrGlyphEntity extends AcTrEntity {
     } else {
       this.flatten()
     }
+    // Worker reconstruct can leave entity ACI-7 glyphs as absolute white.
+    // Rematerialize now (before batching consumes the wrapper) so materials
+    // gain `isForeground` and survive later switchbg repaints.
+    AcTrMTextColorUtil.rematerializeTextHierarchy(
+      this,
+      this._entityTraits,
+      this.renderContext.styleManager
+    )
     this.removeInvalidGeometryLeaves()
     this.traverse(object => {
       getSceneDrawableUserData(object).bboxIntersectionCheck = true
@@ -321,7 +350,10 @@ export abstract class AcTrGlyphEntity extends AcTrEntity {
 
     for (const object of invalidObjects) {
       object.parent?.remove(object)
-      if (this.hasGeometry(object)) {
+      if (
+        this.hasGeometry(object) &&
+        !getSceneDrawableUserData(object).sharesTemplateGeometry
+      ) {
         object.geometry.dispose()
       }
     }

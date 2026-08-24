@@ -1,4 +1,6 @@
 import { AcApI18n, AcApLocale } from '@mlightcad/cad-simple-viewer'
+import ar from 'element-plus/es/locale/lang/ar'
+import cs from 'element-plus/es/locale/lang/cs'
 import en from 'element-plus/es/locale/lang/en'
 import tr from 'element-plus/es/locale/lang/tr'
 import zh from 'element-plus/es/locale/lang/zh-cn'
@@ -11,16 +13,26 @@ const STORAGE_KEY = 'preferred_lang'
 export const LOCALE_OPTIONS = [
   { locale: 'en' as const, label: 'English' },
   { locale: 'zh' as const, label: '简体中文' },
-  { locale: 'tr' as const, label: 'Türkçe' }
+  { locale: 'tr' as const, label: 'Türkçe' },
+  { locale: 'cs' as const, label: 'Čeština' },
+  { locale: 'ar' as const, label: 'العربية' }
 ]
 
 export const isSupportedLocale = (value: string): value is AcApLocale => {
-  return value === 'en' || value === 'zh' || value === 'tr'
+  return (
+    value === 'en' ||
+    value === 'zh' ||
+    value === 'tr' ||
+    value === 'cs' ||
+    value === 'ar'
+  )
 }
 
 const normalizeLocale = (value: string | null | undefined): AcApLocale => {
   if (value === 'zh') return 'zh'
   if (value === 'tr') return 'tr'
+  if (value === 'cs') return 'cs'
+  if (value === 'ar') return 'ar'
   return 'en'
 }
 
@@ -98,6 +110,8 @@ export function useLocale(propLocale?: LocaleProp) {
   const elementPlusLocale = computed(() => {
     if (effectiveLocale.value === 'zh') return zh
     if (effectiveLocale.value === 'tr') return tr
+    if (effectiveLocale.value === 'cs') return cs
+    if (effectiveLocale.value === 'ar') return ar
     return en
   })
 
