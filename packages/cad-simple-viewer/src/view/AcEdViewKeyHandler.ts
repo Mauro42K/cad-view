@@ -1,4 +1,7 @@
 import { AcApDocManager } from '../app'
+import { runMarkupEdit } from '../command/markup/AcApMarkupHistory'
+import { runMeasurementEdit } from '../command/measure/AcApMeasurementHistory'
+import { MEASUREMENT_LAYER } from '../command/measure/AcApMeasurementStore'
 import { AcEdMTextEditor } from '../editor/input/ui/AcEdMTextEditor'
 import type { AcTrView2d } from './AcTrView2d'
 
@@ -54,6 +57,8 @@ export class AcEdViewKeyHandler {
     switch (e.code) {
       case 'Escape':
         this.view.selectionSet.clear()
+        this.view.htmlTransientManager.deselectAll()
+        this.view.isHtmlDirty = true
         return false
 
       case 'Delete':
@@ -63,6 +68,34 @@ export class AcEdViewKeyHandler {
         // point) corrupts the active command's input pipeline because
         // sendStringToExecute clears scripted inputs unconditionally.
         if (!this.view.editor.isActive) {
+          let removed = false
+          const ht = this.view.htmlTransientManager
+          if (ht.hasSelection()) {
+            const selected = ht.getSelectedGroups()
+            const measurements = selected.filter(
+              group => group.layer === MEASUREMENT_LAYER
+            )
+            if (measurements.length > 0) {
+              runMeasurementEdit(this.view, 'Delete Measurement', () => {
+                for (const group of measurements) {
+                  if (ht.detach(group.id)) removed = true
+                }
+              })
+            }
+            const hasMarkupSelection =
+              selected.some(group => group.layer !== MEASUREMENT_LAYER) ||
+              (selected.length === 0 && ht.hasSelection())
+            if (hasMarkupSelection) {
+              runMarkupEdit(this.view, 'Delete Markup', () => {
+                removed = ht.deleteSelected() || removed
+              })
+            }
+          }
+          if (removed) {
+            this.view.isHtmlDirty = true
+            e.preventDefault()
+            return true
+          }
           AcApDocManager.instance.sendStringToExecute('erase')
         }
         return false

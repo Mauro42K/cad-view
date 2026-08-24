@@ -22,6 +22,7 @@ export default {
     fetchingDrawingFile: 'Fetching file ...',
     exportingDxf: 'Exporting DXF ...',
     exportingEntityPreview: 'Exporting image ...',
+    collectingMemoryProfile: 'Analyzing memory ...',
     fontCached: 'Font cached successfully',
     fontCacheFailed: 'Failed to cache font'
   },
@@ -39,6 +40,23 @@ export default {
     block: 'Parsing blocks ...',
     entity: 'Parsing entities ...',
     object: 'Parsing named dictionaries ...',
+    rendering: 'Rendering drawing ...',
     end: 'Finished!'
+  },
+  about: {
+    title: 'About',
+    close: 'Close',
+    product: 'CAD Viewer',
+    tagline: 'High-performance web CAD viewer for DWG and DXF drawings.',
+    website: 'Website',
+    docs: 'Documentation',
+    repository: 'GitHub',
+    copyright: '© {year} mlightcad. All rights reserved.',
+    ok: 'OK'
+  },
+  drawStyle: {
+    color: 'Color',
+    lineWeight: 'Lineweight',
+    fontSize: 'Text height'
   }
 }

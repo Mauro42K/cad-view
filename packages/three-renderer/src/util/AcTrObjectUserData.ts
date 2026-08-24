@@ -65,6 +65,17 @@ export interface AcTrEntityIdentityUserData {
   objectId?: string
   ownerId?: string
   layerName?: string
+  /**
+   * Layer name authored in the block definition before layer-0 inheritance.
+   * Set when {@link layerName} is remapped from `"0"` to an INSERT layer so
+   * material remapping can still treat the drawable as layer-0 ByLayer.
+   */
+  authoredLayerName?: string
+  /**
+   * Layer of the outermost (or owning) INSERT that produced this drawable.
+   * Used to hide all INSERT fragments when that INSERT layer is frozen.
+   */
+  insertLayerName?: string
 }
 
 /**
@@ -84,16 +95,36 @@ export type AcTrBakedWorldMatrixUserData = {
 }
 
 /**
+ * Marks drawable leaves whose {@link THREE.BufferGeometry} is borrowed from an
+ * immutable block-template cache entry. Instance dispose must not release it.
+ */
+export type AcTrSharedTemplateGeometryUserData = {
+  /**
+   * When `true`, this leaf aliases geometry owned by an
+   * {@link AcDbRenderingCache} template (or another shared source).
+   * {@link AcTrEntity.disposeObject} skips `geometry.dispose()` for the leaf.
+   */
+  sharesTemplateGeometry?: boolean
+}
+
+/**
  * Leaf line/mesh/point objects produced by entity conversion, prior to batching.
  */
 export type AcTrSceneDrawableUserData = AcTrPickableObjectUserData &
   AcTrStyledDrawableUserData &
   AcTrRteObjectUserData &
   AcTrNoBatchUserData &
-  AcTrBakedWorldMatrixUserData
+  AcTrBakedWorldMatrixUserData &
+  AcTrSharedTemplateGeometryUserData
 
 export interface AcTrHighlightUserData {
   objectId?: string
+  /**
+   * Three.js id of the origin batch this overlay was extracted from.
+   *
+   * Used to rebind shared packed `attributes`/`index` after batch growth.
+   */
+  batchedObjectId?: number
   disposeGeometryOnRemove?: boolean
   /** Marks geometry extracted for command preview overlays. */
   previewDrawable?: boolean

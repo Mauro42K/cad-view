@@ -3,24 +3,27 @@ import {
   AcEdBaseView,
   AcTrView2d,
   getDrawingExportBaseName,
-  resolveExportDownloadName,
-  yieldToMain
+  resolveExportDownloadName
 } from '@mlightcad/cad-simple-viewer'
+import { accmYieldForPaint } from '@mlightcad/data-model'
 
 import {
   type AcApHtmlExportOptions,
   captureAcApHtmlViewState,
   resolveAcApHtmlExportOptions
 } from './AcApHtmlExportOptions'
+import {
+  type AcApHtmlPluginOptions,
+  resolveViewerRuntimeUrl
+} from './AcApHtmlPluginOptions'
 import { AcApHtmlSnapshotBuilder } from './AcApHtmlSnapshotBuilder'
+import {
+  protectAcExHtmlEncodedSnapshot,
+  resolveAcApHtmlExpiresAt
+} from './AcExHtmlAccess'
 import { packHtml } from './AcExHtmlPackager'
+import { encodeSnapshot } from './AcExSnapshotCodec'
 import type { AcExSnapshot } from './AcExSnapshotTypes'
-
-/**
- * Relative URL of the bundled offline viewer script when no override is
- * configured on {@link AcApDocManager.htmlViewerRuntimeUrl}.
- */
-const DEFAULT_RUNTIME_URL = './viewer-runtime.iife.js'
 
 /**
  * Orchestrates export of the active drawing to a downloadable HTML file.
@@ -32,10 +35,18 @@ const DEFAULT_RUNTIME_URL = './viewer-runtime.iife.js'
  *
  * A busy indicator is shown for the duration of the operation. The UI thread
  * is yielded between heavy steps so the browser can repaint.
+ *
+ * The runtime URL is configured on this plugin (`viewerRuntimeUrl`), not on
+ * `AcApDocManager` — see {@link AcApHtmlPluginOptions}.
  */
 export class AcApHtmlConvertor {
   /** Collects geometry and metadata from the live Three.js scene. */
   private readonly _snapshotBuilder = new AcApHtmlSnapshotBuilder()
+
+  /**
+   * @param options - Plugin options; `viewerRuntimeUrl` overrides module defaults
+   */
+  constructor(private readonly options: AcApHtmlPluginOptions = {}) {}
 
   /**
    * Prepares the active 2D view for HTML snapshot export.
@@ -46,7 +57,10 @@ export class AcApHtmlConvertor {
    */
   async prepareAcTrView2dForHtmlExport(
     view: AcEdBaseView | null | undefined,
-    options: Pick<AcApHtmlExportOptions, 'exportInvisibleLayers'> = {}
+    options: Pick<
+      AcApHtmlExportOptions,
+      'exportInvisibleLayers' | 'exportLayouts'
+    > = {}
   ): Promise<AcTrView2d> {
     if (!view || !('cadScene' in view) || !view.cadScene) {
       throw new Error(
@@ -59,10 +73,12 @@ export class AcApHtmlConvertor {
       )
     }
     const resolved = resolveAcApHtmlExportOptions(options)
-    await view.ensureEntitiesConvertedForExport({
-      includeInvisibleLayers: resolved.exportInvisibleLayers
-    })
-    await yieldToMain()
+    const conversionOptions = {
+      includeInvisibleLayers: resolved.exportInvisibleLayers,
+      includeLayouts: resolved.exportLayouts
+    }
+    await view.ensureEntitiesConvertedForExport(conversionOptions)
+    await accmYieldForPaint()
     return view
   }
 
@@ -72,7 +88,8 @@ export class AcApHtmlConvertor {
    * @param fileName - Optional base name for the download (without extension).
    *   When omitted, the active document's `fileName` is used. A `.html` suffix
    *   is always applied; `.dwg` / `.dxf` suffixes on the input are stripped.
-   * @param options - Export options such as invisible-layer inclusion and initial view.
+   * @param options - Export options such as invisible-layer inclusion, layout
+   *   inclusion, and initial view.
    * @param view - Optional view to export from. Defaults to the active view.
    * @returns Resolves when packaging and download complete.
    */
@@ -85,7 +102,7 @@ export class AcApHtmlConvertor {
     const resolved = resolveAcApHtmlExportOptions(options)
 
     await docManager.withBusyIndicator(async () => {
-      await yieldToMain()
+      await accmYieldForPaint()
 
       const document = docManager.curDocument
       const exportView = await this.prepareAcTrView2dForHtmlExport(
@@ -101,29 +118,45 @@ export class AcApHtmlConvertor {
           title: getDrawingExportBaseName(sourceName),
           background: exportView.backgroundColor,
           exportInvisibleLayers: resolved.exportInvisibleLayers,
+          exportLayouts: resolved.exportLayouts,
           initialView: resolved.initialView,
           viewerMode: resolved.viewerMode,
           viewState:
-            resolved.initialView === 'current'
+            resolved.initialView === 'current' &&
+            (resolved.exportLayouts ||
+              exportView.activeLayoutBtrId === exportView.modelSpaceBtrId)
               ? captureAcApHtmlViewState(exportView)
               : undefined
         }
       )
 
-      await yieldToMain()
+      await accmYieldForPaint()
 
-      const viewerRuntime = await this.loadViewerRuntime(
-        docManager.htmlViewerRuntimeUrl
+      const viewerRuntime = await this.loadViewerRuntime()
+
+      await accmYieldForPaint()
+
+      const expiresAt = resolveAcApHtmlExpiresAt(
+        resolved.expiryDays,
+        Date.now(),
+        resolved.expiresAt
       )
-
-      await yieldToMain()
+      const protectedSnapshot = await protectAcExHtmlEncodedSnapshot(
+        encodeSnapshot(snapshot),
+        {
+          expiresAt,
+          password: resolved.password || undefined
+        }
+      )
 
       const html = packHtml(snapshot, {
         title: snapshot.meta.title,
-        viewerRuntime
+        viewerRuntime,
+        encoded: protectedSnapshot.encoded,
+        accessManifest: protectedSnapshot.manifest
       })
 
-      await yieldToMain()
+      await accmYieldForPaint()
 
       this.downloadHtml(html, resolveExportDownloadName(sourceName, 'html'))
     })
@@ -144,16 +177,20 @@ export class AcApHtmlConvertor {
     const docManager = AcApDocManager.instance
 
     await docManager.withBusyIndicator(async () => {
-      await yieldToMain()
-      const viewerRuntime = await this.loadViewerRuntime(
-        docManager.htmlViewerRuntimeUrl
+      await accmYieldForPaint()
+      const viewerRuntime = await this.loadViewerRuntime()
+      await accmYieldForPaint()
+      const protectedSnapshot = await protectAcExHtmlEncodedSnapshot(
+        encodeSnapshot(snapshot),
+        { expiresAt: null }
       )
-      await yieldToMain()
       const html = packHtml(snapshot, {
         title: snapshot.meta.title,
-        viewerRuntime
+        viewerRuntime,
+        encoded: protectedSnapshot.encoded,
+        accessManifest: protectedSnapshot.manifest
       })
-      await yieldToMain()
+      await accmYieldForPaint()
       this.downloadHtml(html, downloadName)
     })
   }
@@ -161,18 +198,17 @@ export class AcApHtmlConvertor {
   /**
    * Fetches the offline viewer runtime as source text for inlining.
    *
-   * @param url - Absolute or relative URL of `viewer-runtime.iife.js`. When
-   *   omitted, {@link DEFAULT_RUNTIME_URL} is used.
    * @returns The runtime script body as a string.
    * @throws If the HTTP response is not OK (missing build artifact, CORS, etc.).
    */
-  private async loadViewerRuntime(url?: string | URL): Promise<string> {
-    const runtimeUrl = url != null ? String(url) : DEFAULT_RUNTIME_URL
+  private async loadViewerRuntime(): Promise<string> {
+    const runtimeUrl = resolveViewerRuntimeUrl(this.options.viewerRuntimeUrl)
     const response = await fetch(runtimeUrl)
     if (!response.ok) {
       throw new Error(
         `Failed to load HTML viewer runtime from "${runtimeUrl}" (${response.status}). ` +
-          'Build @mlightcad/cad-html-plugin and copy viewer-runtime.iife.js to your app assets.'
+          'Install @mlightcad/cad-html-plugin, copy viewer-runtime.iife.js to your app assets, ' +
+          'and set viewerRuntimeUrl on registerLazyHtmlPlugin / createHtmlPlugin / AcApHtmlConvertor.'
       )
     }
     return response.text()

@@ -6,13 +6,21 @@ const mockProgressInstances: Array<{
 }> = []
 
 const mockEventBusEmit = jest.fn()
+const mockYieldForPaint = jest.fn(() => Promise.resolve())
+
+jest.mock('@mlightcad/data-model', () => ({
+  ...jest.requireActual('@mlightcad/data-model'),
+  accmYieldForPaint: mockYieldForPaint
+}))
 
 jest.mock('../src/app/AcApProgress', () => ({
   AcApProgress: jest.fn().mockImplementation(() => {
     const instance = {
       hide: jest.fn(),
       show: jest.fn(),
-      setMessage: jest.fn()
+      setMessage: jest.fn(),
+      setHost: jest.fn(),
+      setOverlayColor: jest.fn()
     }
     mockProgressInstances.push(instance)
     return instance
@@ -44,6 +52,7 @@ describe('AcApOpenFileProgressController', () => {
   beforeEach(() => {
     mockProgressInstances.length = 0
     mockEventBusEmit.mockClear()
+    mockYieldForPaint.mockClear()
     controller = new AcApOpenFileProgressController({} as HTMLElement)
     progress = mockProgressInstances[0]
     progress.hide.mockClear()
@@ -81,20 +90,19 @@ describe('AcApOpenFileProgressController', () => {
 
     controller.handle({
       database,
-      percentage: 80,
+      percentage: 100,
       stage: 'FETCH_FILE',
-      subStageStatus: 'IN-PROGRESS'
+      subStageStatus: 'END'
     })
-
-    const conversion = controller.handle({
+    const next = controller.handle({
       database,
-      percentage: 10,
+      percentage: 5,
       stage: 'CONVERSION',
-      subStage: 'ENTITY',
-      subStageStatus: 'IN-PROGRESS'
+      subStage: 'PARSE',
+      subStageStatus: 'START'
     })
 
-    expect(conversion.percentage).toBe(10)
+    expect(next.percentage).toBe(5)
   })
 
   it('hides the overlay when open-file progress completes', () => {
@@ -130,25 +138,73 @@ describe('AcApOpenFileProgressController', () => {
     expect(next.percentage).toBe(20)
   })
 
-  it('emits fonts-not-loaded when font loading fails but parsing continues', () => {
+  it('beginOpen shows the overlay and yields for paint', async () => {
+    await controller.beginOpen({})
+
+    expect(progress.show).toHaveBeenCalled()
+    expect(mockYieldForPaint).toHaveBeenCalled()
+    expect(mockEventBusEmit).toHaveBeenCalledWith(
+      'open-file-progress',
+      expect.objectContaining({
+        percentage: 0,
+        stage: 'CONVERSION',
+        subStage: 'START',
+        subStageStatus: 'START'
+      })
+    )
+  })
+
+  it('dedupes overlay show/setMessage while still emitting every progress event', () => {
+    const database = {}
+
     controller.handle({
-      database: {},
-      percentage: 5,
+      database,
+      percentage: 20,
       stage: 'CONVERSION',
-      subStage: 'FONT',
-      subStageStatus: 'ERROR',
-      data: {
-        code: 'font_load_failed',
-        error: 'Failed to fetch',
-        fonts: ['arial', 'simkai']
-      }
+      subStage: 'ENTITY',
+      subStageStatus: 'START'
+    })
+    controller.handle({
+      database,
+      percentage: 40,
+      stage: 'CONVERSION',
+      subStage: 'ENTITY',
+      subStageStatus: 'IN-PROGRESS'
+    })
+    controller.handle({
+      database,
+      percentage: 60,
+      stage: 'CONVERSION',
+      subStage: 'ENTITY',
+      subStageStatus: 'IN-PROGRESS'
     })
 
-    expect(mockEventBusEmit).toHaveBeenCalledWith('fonts-not-loaded', {
-      fonts: [
-        { fontName: 'arial', url: '' },
-        { fontName: 'simkai', url: '' }
-      ]
+    expect(progress.show).toHaveBeenCalledTimes(1)
+    expect(progress.setMessage).toHaveBeenCalledTimes(1)
+    expect(progress.setMessage).toHaveBeenCalledWith('main.progress.entity')
+    expect(mockEventBusEmit).toHaveBeenCalledTimes(3)
+  })
+
+  it('updates overlay message when the conversion sub-stage changes', () => {
+    const database = {}
+
+    controller.handle({
+      database,
+      percentage: 5,
+      stage: 'CONVERSION',
+      subStage: 'PARSE',
+      subStageStatus: 'IN-PROGRESS'
     })
+    controller.handle({
+      database,
+      percentage: 15,
+      stage: 'CONVERSION',
+      subStage: 'STYLE',
+      subStageStatus: 'START'
+    })
+
+    expect(progress.setMessage).toHaveBeenNthCalledWith(1, 'main.progress.parse')
+    expect(progress.setMessage).toHaveBeenNthCalledWith(2, 'main.progress.style')
+    expect(progress.show).toHaveBeenCalledTimes(1)
   })
 })

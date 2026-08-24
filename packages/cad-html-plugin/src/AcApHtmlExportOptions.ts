@@ -1,10 +1,13 @@
 import type { AcTrView2d } from '@mlightcad/cad-simple-viewer'
 
+import type { AcApHtmlExpiryDays } from './AcExHtmlAccess'
 import type {
   AcExInitialViewMode,
   AcExViewerMode,
   AcExViewState
 } from './AcExSnapshotTypes'
+
+export type { AcApHtmlExpiryDays } from './AcExHtmlAccess'
 
 /** Matches the offline HTML viewer orthographic half-height in world units. */
 const HTML_VIEWER_CAMERA_FRUSTUM = 400
@@ -19,14 +22,36 @@ export interface AcApHtmlExportOptions {
    */
   exportInvisibleLayers?: boolean
   /**
+   * When `true`, paper-space layouts are converted and written into the snapshot.
+   * When `false`, only model space is exported, the offline toolbar omits the
+   * layout switcher, and the viewer can release CPU geometry after the first
+   * draw. Defaults to `true`.
+   */
+  exportLayouts?: boolean
+  /**
    * Initial framing when the exported HTML is opened. Defaults to `'fit'`.
    */
   initialView?: AcExInitialViewMode
   /**
-   * Offline viewer capability profile. `'view'` omits OSNAP data and measurement
-   * UI for a smaller, faster HTML file. Defaults to `'measure'`.
+   * Offline viewer capability profile. `'view'` omits OSNAP data, measurement,
+   * and markup UI for a smaller, faster HTML file. Defaults to `'measure'`.
    */
   viewerMode?: AcExViewerMode
+  /**
+   * How long the exported HTML remains valid. Defaults to `'never'`.
+   * Use `'custom'` with {@link AcApHtmlExportOptions.expiresAt} for an absolute time.
+   */
+  expiryDays?: AcApHtmlExpiryDays
+  /**
+   * Absolute expiry timestamp (Unix ms). Used when {@link AcApHtmlExportOptions.expiryDays}
+   * is `'custom'`. Ignored for relative periods and `'never'`.
+   */
+  expiresAt?: number | null
+  /**
+   * Optional password required to open the exported HTML. When set, the snapshot
+   * payload is encrypted in the file.
+   */
+  password?: string
 }
 
 /**
@@ -34,11 +59,21 @@ export interface AcApHtmlExportOptions {
  */
 export function resolveAcApHtmlExportOptions(
   options: AcApHtmlExportOptions = {}
-): Required<AcApHtmlExportOptions> {
+): Required<
+  Omit<AcApHtmlExportOptions, 'password' | 'expiryDays' | 'expiresAt'>
+> & {
+  expiryDays: AcApHtmlExpiryDays
+  expiresAt: number | null
+  password: string
+} {
   return {
     exportInvisibleLayers: options.exportInvisibleLayers !== false,
+    exportLayouts: options.exportLayouts !== false,
     initialView: options.initialView ?? 'fit',
-    viewerMode: options.viewerMode ?? 'measure'
+    viewerMode: options.viewerMode ?? 'measure',
+    expiryDays: options.expiryDays ?? 'never',
+    expiresAt: options.expiresAt ?? null,
+    password: options.password?.trim() ?? ''
   }
 }
 /**

@@ -22,6 +22,7 @@ export default {
     fetchingDrawingFile: '正在加载图纸文件...',
     exportingDxf: '正在导出 DXF ...',
     exportingEntityPreview: '正在导出图片 ...',
+    collectingMemoryProfile: '正在分析内存 ...',
     fontCached: '字体已成功缓存',
     fontCacheFailed: '缓存字体失败'
   },
@@ -39,6 +40,23 @@ export default {
     block: '正在解析块..',
     entity: '正在解析图元...',
     object: '正在解析NODs...',
+    rendering: '正在渲染图纸 ...',
     end: '完成！'
+  },
+  about: {
+    title: '关于',
+    close: '关闭',
+    product: 'CAD 查看器',
+    tagline: '面向 DWG/DXF 图纸的高性能 Web CAD 查看器。',
+    website: '官网',
+    docs: '文档',
+    repository: 'GitHub',
+    copyright: '© {year} mlightcad。保留所有权利。',
+    ok: '确定'
+  },
+  drawStyle: {
+    color: '颜色',
+    lineWeight: '线宽',
+    fontSize: '字号'
   }
 }

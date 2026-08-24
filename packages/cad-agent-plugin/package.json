@@ -1,6 +1,6 @@
 {
   "name": "@mlightcad/cad-agent-plugin",
-  "version": "1.5.7",
+  "version": "1.6.3",
   "license": "MIT",
   "type": "module",
   "repository": {
@@ -56,14 +56,14 @@
   },
   "devDependencies": {
     "@mlightcad/cad-simple-viewer": "workspace:*",
-    "@mlightcad/data-model": "^1.10.3",
+    "@mlightcad/data-model": "^1.14.2",
     "@vitejs/plugin-vue": "^6.0.8",
-    "vue": "^3.5.41",
+    "vue": "^3.4.21",
     "vue-tsc": "^2.1.6"
   },
   "peerDependencies": {
     "@mlightcad/cad-simple-viewer": "workspace:*",
-    "@mlightcad/data-model": "^1.10.3",
-    "vue": "^3.5.41"
+    "@mlightcad/data-model": "^1.14.2",
+    "vue": "^3.4.21"
   }
 }

@@ -2,6 +2,14 @@ import { AcApI18n } from '@mlightcad/cad-simple-viewer'
 import { AcDbEntity } from '@mlightcad/data-model'
 import { createI18n } from 'vue-i18n'
 
+import arCommand from './ar/command'
+import arDialog from './ar/dialog'
+import arEntity from './ar/entity'
+import arMain from './ar/main'
+import csCommand from './cs/command'
+import csDialog from './cs/dialog'
+import csEntity from './cs/entity'
+import csMain from './cs/main'
 import enCommand from './en/command'
 import enDialog from './en/dialog'
 import enEntity from './en/entity'
@@ -18,12 +26,21 @@ import zhMain from './zh/main'
 // Get language of browser - use same logic as useLocale
 const getInitialLocale = (): string => {
   const stored = localStorage.getItem('preferred_lang')
-  if (stored === 'en' || stored === 'zh' || stored === 'tr') return stored
+  if (
+    stored === 'en' ||
+    stored === 'zh' ||
+    stored === 'tr' ||
+    stored === 'cs' ||
+    stored === 'ar'
+  )
+    return stored
 
   const browserLang = navigator.language.toLowerCase()
   const browserLocale = browserLang.substring(0, 2)
   if (browserLocale === 'zh') return 'zh'
   if (browserLocale === 'tr') return 'tr'
+  if (browserLocale === 'cs') return 'cs'
+  if (browserLocale === 'ar') return 'ar'
   return 'en'
 }
 
@@ -45,12 +62,26 @@ const messages = {
     command: trCommand,
     dialog: trDialog,
     entity: trEntity
+  },
+  cs: {
+    main: csMain,
+    command: csCommand,
+    dialog: csDialog,
+    entity: csEntity
+  },
+  ar: {
+    main: arMain,
+    command: arCommand,
+    dialog: arDialog,
+    entity: arEntity
   }
 }
 
 AcApI18n.mergeLocaleMessage('en', messages.en)
 AcApI18n.mergeLocaleMessage('zh', messages.zh)
 AcApI18n.mergeLocaleMessage('tr', messages.tr)
+AcApI18n.mergeLocaleMessage('cs', messages.cs)
+AcApI18n.mergeLocaleMessage('ar', messages.ar)
 
 export const i18n = createI18n({
   legacy: false,
@@ -79,15 +110,31 @@ export const entityPropEnum = (name: string) => {
 }
 
 export const colorName = (colorKeyName: string) => {
-  if (colorKeyName == 'ByLayer' || colorKeyName == 'ByBlock') {
-    return colorKeyName
-  } else {
-    const t = i18n.global.t
-    const key = 'entity.color.' + colorKeyName.toLowerCase()
-    return t(key, colorKeyName, { missingWarn: false })
-  }
-}
+  const normalizedSymbolicColor = colorKeyName.trim().toLowerCase()
 
+  if (i18n.global.locale.value === 'ar') {
+    if (normalizedSymbolicColor === 'bylayer') return 'حسب الطبقة'
+    if (normalizedSymbolicColor === 'byblock') return 'حسب الكتلة'
+  }
+  const value = colorKeyName.trim()
+
+  // Numeric values are AutoCAD Color Index (ACI) values.
+  // They are identifiers, not locale message keys.
+  if (/^\d+$/.test(value)) {
+    return value
+  }
+
+  if (value === 'ByLayer' || value === 'ByBlock') {
+    return value
+  }
+
+  const t = i18n.global.t
+  const key = 'entity.color.' + value.toLowerCase()
+  return t(key, value, {
+    missingWarn: false,
+    fallbackWarn: false
+  })
+}
 export const toolPaletteTitle = (name: string) => {
   const t = i18n.global.t
   const key = `main.toolPalette.${name}.title`

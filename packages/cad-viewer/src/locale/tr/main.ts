@@ -8,12 +8,15 @@ export default {
     exportHtml: 'HTML\'e Dışa Aktar',
     exportPdf: 'PDF\'e Dışa Aktar',
     exportSvg: 'SVG\'e Dışa Aktar',
-    exportImage: 'Görüntüye Dışa Aktar'
+    exportImage: 'Görüntüye Dışa Aktar',
+    about: 'Hakkında'
   },
   ribbon: {
     tab: {
       home: 'Ana Sayfa',
-      tools: 'Araçlar',
+      insert: 'Ekle',
+      review: 'İnceleme',
+      measurement: 'Ölçüm',
       hatchContext: 'Tarama',
       mtextEditorContext: 'Metin Düzenleyici'
     },
@@ -212,7 +215,18 @@ export default {
       properties: 'Özellikler',
       utilities: 'Yardımcı Araçlar',
       annotation: 'Açıklama',
-      measurement: 'Ölçüm'
+      review: 'İnceleme',
+      measurement: 'Ölçüm',
+      style: 'Stil',
+      lengthUnits: 'Uzunluk Birimleri',
+      angleUnits: 'Açı Birimleri',
+      reference: 'Referans',
+      block: 'Blok'
+    },
+    insertBlock: {
+      empty: 'Kullanılabilir blok yok',
+      currentDrawing: 'Geçerli Çizim',
+      previewMenu: 'Blok önizleme galerisi'
     },
     property: {
       color: 'Renk',
@@ -262,6 +276,9 @@ export default {
         'Bağlı bir dizi çizgi veya yay parçasını tek bir nesne olarak çizin.',
       spline:
         'Uyum veya kontrol noktaları üzerinden düzgün bir spline eğrisi çizin.',
+      sketch: 'Bir dizi serbest el çizgi parçası oluşturun.',
+      revcloud:
+        'Çizim alanlarını vurgulamak için bir revizyon bulutu oluşturun.',
       circle: 'Birden fazla oluşturma yöntemiyle bir daire çizin.',
       arc: 'Birden fazla oluşturma yöntemiyle bir yay çizin.',
       mline:
@@ -284,8 +301,22 @@ export default {
       properties: 'Geçerli seçim için Özellikler panelini açın.',
       quickSelect:
         'Ölçütlere göre varlıkları filtrelemek ve seçmek için Hızlı Seçimi açın.',
+      countList:
+        'Blok sayılarını görüntülemek ve yönetmek için Sayım paletini açın.',
+      missingResources:
+        'Yazı tipleri, görseller ve xref’ler için Eksik / Harici Kaynaklar paletini açın.',
       drawingUnits:
         'Koordinat biçimlerini, hassasiyeti ve ekleme ölçeğini ayarlamak için Çizim Birimlerini açın.',
+      attachDwg:
+        'Bir DWG veya DXF çizimini harici referans olarak ekleyin (XATTACH).',
+      attachImage:
+        'Bir raster görüntüyü harici referans olarak ekleyin (IMAGEATTACH).',
+      insert:
+        'Blok tanımlarını göz atmak ve eklemek için Bloklar paletini açın (INSERT).',
+      editAttributes:
+        'Blok öznitelik değerlerini ve görüntü özelliklerini düzenlemek için Gelişmiş Öznitelik Düzenleyiciyi açın (ATTEDIT).',
+      defineAttribute:
+        'Bir blokta kullanılacak öznitelik tanımı oluşturun (ATTDEF).',
       agent:
         'Doğal dil kullanarak geometri çizmek için CAD Ajanı panel sekmesini açın.',
       propertyColor:
@@ -365,6 +396,8 @@ export default {
       xline: 'Sonsuz Çizgi',
       ellipse: 'Elips',
       spline: 'Spline',
+      sketch: 'Eskiz',
+      revcloud: 'Revizyon Bulutu',
       rect: 'Dikdörtgen',
       rectangle: 'Dikdörtgen',
       polygon: 'Çokgen',
@@ -382,7 +415,13 @@ export default {
       redo: 'Yinele',
       properties: 'Özellikler',
       quickSelect: 'Hızlı\nSeçim',
+      countList: 'Sayım',
       drawingUnits: 'Çizim\nBirimleri',
+      attachDwg: 'DWG\nEkle',
+      attachImage: 'Görüntü\nEkle',
+      insert: 'Ekle',
+      editAttributes: 'Öznitelikleri\nDüzenle',
+      defineAttribute: 'Öznitelik\nTanımla',
       agent: 'CAD\nAjanı'
     }
   },
@@ -407,18 +446,25 @@ export default {
       text: 'Yay',
       description: 'Üç nokta ile tanımlanan bir yayın uzunluğunu ölçer'
     },
+    measurePoint: {
+      text: 'Nokta',
+      description: 'Seçilen noktanın X/Y koordinatlarını ölçer'
+    },
     clearMeasurements: {
       text: 'Temizle',
-      description: 'Görünümden tüm etkin ölçümleri kaldırır'
+      description: 'Geçerli yerleşimdeki tüm ölçümleri kaldırır'
+    },
+    measurementImport: {
+      text: 'İçe Aktar',
+      description: 'Ölçümleri sidecar JSON dosyasından içe aktarır'
+    },
+    measurementExport: {
+      text: 'Dışa Aktar',
+      description: 'Ölçümleri sidecar JSON dosyasına dışa aktarır'
     },
     annotation: {
       text: 'Açıklama',
-      description:
-        'Çizim içeriğini açıklamak ve işaretlemek için metin veya grafik açıklamalar oluşturur'
-    },
-    hideAnnotation: {
-      text: 'Gizle',
-      description: 'Açıklamaları gizler'
+      description: 'İnceleme araçları'
     },
     layer: {
       text: 'Katman',
@@ -429,38 +475,99 @@ export default {
       description:
         'Görüntüleme yönünü veya büyütmeyi değiştirmeden görünümü kaydırır'
     },
-    revCircle: {
-      text: 'Daire',
-      description:
-        'Çizimde alanları vurgulamak ve açıklamak için daireler kullanır'
+    markupPanel: {
+      text: 'İnceleme',
+      description: 'İşaret paletini açar'
     },
-    revLine: {
-      text: 'Çizgi',
-      description:
-        'Çizimdeki nesneleri veya alanları açıklamak ve göstermek için düz çizgiler kullanır'
+    markupText: {
+      text: 'Metin',
+      description: 'Metin işareti yerleştirir'
     },
-    revFreehand: {
-      text: 'Serbest El',
-      description:
-        'Çizim içeriğini serbestçe açıklamak ve vurgulamak için serbest el çizimleri kullanır'
+    markupCloud: {
+      text: 'Bulut',
+      description: 'Bulut işareti oluşturur'
     },
-    revRect: {
+    markupRect: {
       text: 'Dikdörtgen',
-      description:
-        'Çizimdeki nesneleri veya alanları vurgulamak ve açıklamak için dikdörtgenler kullanın'
+      description: 'Dikdörtgen işareti oluşturur'
     },
-    revCloud: {
-      text: 'Bulut Revizyon',
+    markupCircle: {
+      text: 'Daire',
+      description: 'Daire işareti oluşturur'
+    },
+    markupArrow: {
+      text: 'Ok',
+      description: 'Ok işareti oluşturur'
+    },
+    markupLine: {
+      text: 'Çizgi',
+      description: 'Çizgi işareti oluşturur'
+    },
+    markupCallout: {
+      text: 'Çağrı',
+      description: 'Çağrı notu oluşturur'
+    },
+    markupStamp: {
+      text: 'Damga',
+      description: 'Damga yerleştirir'
+    },
+    markupImport: {
+      text: 'İçe Aktar',
+      description: 'İşaretleri sidecar JSON dosyasından içe aktarır'
+    },
+    markupExport: {
+      text: 'Dışa Aktar',
+      description: 'İşaretleri sidecar JSON dosyasına dışa aktarır'
+    },
+    markupColor: {
+      text: 'Renk',
+      description: 'Yeni işaret çizimleri için rengi ayarlar'
+    },
+    markupLineWeight: {
+      text: 'Çizgi Kalınlığı',
+      description: 'Yeni işaret çizimleri için çizgi kalınlığını ayarlar'
+    },
+    markupFontSize: {
+      text: 'Yazı Boyutu',
+      description: 'Metin ve çağrı işaretleri için yazı boyutunu ayarlar'
+    },
+    measurementColor: {
+      text: 'Renk',
+      description: 'Seçili ölçümün veya sonraki ölçümlerin rengini ayarlar'
+    },
+    measurementLineWeight: {
+      text: 'Çizgi Kalınlığı',
       description:
-        'Çizimdeki alanları bulut şeklinde bir çerçeveyle vurgulamak için kullanılır'
+        'Seçili ölçümün veya sonraki ölçümlerin çizgi kalınlığını ayarlar'
+    },
+    measurementFontSize: {
+      text: 'Yazı Boyutu',
+      description:
+        'Seçili ölçümün veya sonraki ölçümlerin yazı boyutunu ayarlar'
+    },
+    showMarkup: {
+      text: 'Göster',
+      description: 'İşaretleri gösterir'
+    },
+    hideMarkup: {
+      text: 'Gizle',
+      description: 'İşaretleri gizler'
+    },
+    showMeasurements: {
+      text: 'Göster',
+      description: 'Ölçümleri gösterir'
+    },
+    hideMeasurements: {
+      text: 'Gizle',
+      description: 'Ölçümleri gizler'
+    },
+    clearMarkups: {
+      text: 'Temizle',
+      description: 'Geçerli yerleşimdeki tüm işaretleri temizler'
     },
     select: {
       text: 'Seç',
       description: 'Varlıkları seçer'
-    },
-    showAnnotation: {
-      text: 'Göster',
-      description: 'Açıklamaları gösterir'
     },
     switchBg: {
       text: 'Değiştir',
@@ -485,7 +592,7 @@ export default {
       entityInfo: 'Varlık Bilgisi',
       fileName: 'Dosya Adı',
       languageSelector: 'Dil Seçici',
-      mainMenu: 'Ana Menü',
+      ribbon: 'Şerit',
       toolbar: 'Araç Çubuğu',
       stats: 'İstatistikler'
     },
@@ -496,6 +603,7 @@ export default {
       center: 'Merkez',
       node: 'Düğüm',
       quadrant: 'Çeyrek',
+      intersection: 'Kesişim',
       insertion: 'Ekleme',
       nearest: 'En Yakın'
     },
@@ -534,7 +642,8 @@ export default {
     },
     export: {
       tooltip: 'Görüntüyü PNG olarak dışa aktar'
-    }
+    },
+    moreLayouts: 'Diğer düzenler'
   },
   toolPalette: {
     entityProperties: {
@@ -550,13 +659,273 @@ export default {
     layerManager: {
       tab: 'Katmanlar',
       title: 'Katman Yöneticisi',
+      currentLayerLabel: 'Geçerli katman: {name}',
+      searchPlaceholder: 'Katman ara',
+      filters: 'Filtreler',
+      collapseFilters: 'Filtreleri daralt',
+      expandFilters: 'Filtreleri genişlet',
+      filterAll: 'Tümü',
+      filterAllUsed: 'Kullanılan Tüm Katmanlar',
+      toolbar: {
+        showFilters: 'Katman Filtreleri',
+        newFilter: 'Yeni Filtre',
+        newFilterGroup: 'Yeni Grup Filtresi',
+        newLayer: 'Yeni Katman',
+        deleteLayer: 'Katmanı Sil',
+        setCurrent: 'Geçerli Yap'
+      },
+      prompts: {
+        newFilterTitle: 'Yeni Filtre',
+        newFilterName: 'Filtre adını girin',
+        newFilterGroupTitle: 'Yeni Grup Filtresi',
+        newFilterGroupName: 'Grup filtresi adını girin',
+        newLayerTitle: 'Yeni Katman',
+        newLayerName: 'Katman adını girin',
+        confirm: 'Tamam',
+        cancel: 'İptal'
+      },
+      messages: {
+        filterCreated: '"{name}" filtresi oluşturuldu',
+        filterExists: '"{name}" adlı filtre zaten var',
+        filterCreateFailed: 'Filtre oluşturulamadı',
+        layerCreated: '"{name}" katmanı oluşturuldu',
+        layerExists: '"{name}" katmanı zaten var',
+        layerCreateFailed: 'Katman oluşturulamadı',
+        layerDeleted: '"{name}" katmanı silindi',
+        layerDeleteFailed: '"{name}" katmanı silinemedi',
+        cannotDeleteLayer0: '"0" katmanı silinemez',
+        cannotDeleteCurrent: 'Geçerli katman silinemez',
+        selectLayerFirst: 'Önce bir katman seçin',
+        setCurrentSuccess: 'Geçerli katman "{name}" olarak ayarlandı',
+        setCurrentFailed: 'Geçerli katman ayarlanamadı'
+      },
       layerList: {
         name: 'Ad',
         on: 'Açık',
+        freeze: 'Dondur',
+        lock: 'Kilitle',
+        plot: 'Çizdir',
         color: 'Renk',
+        linetype: 'Çizgi tipi',
+        lineweight: 'Çizgi kalınlığı',
+        transparency: 'Saydamlık',
+        description: 'Açıklama',
         currentLayer: 'Geçerli katman',
-        zoomToLayer: 'Tıklanan "{layer}" katmanına yakınlaştırıldı'
+        newLayerPlaceholder: 'Katman adı',
+        zoomToLayer: 'Tıklanan "{layer}" katmanına yakınlaştırıldı',
+        lineWeightDefault: 'Varsayılan'
       }
+    },
+    countList: {
+      tab: 'Sayım',
+      title: 'Sayım',
+      searchPlaceholder: 'Blok adı ara',
+      countInArea: 'Alanda say',
+      areaSet: 'Sayım alanı güncellendi',
+      areaCleared: 'Tüm model alanı sayılıyor',
+      blockName: 'Blok',
+      count: 'Adet',
+      empty: 'Görünür blok bulunamadı',
+      prompt: {
+        firstCorner: 'Sayım alanının ilk köşesini belirtin veya [Entire]: ',
+        secondCorner: 'Karşı köşeyi belirtin: '
+      }
+    },
+    designReview: {
+      tab: 'İnceleme',
+      title: 'İnceleme',
+      searchPlaceholder: 'İşaretlerde ara',
+      empty: 'Henüz işaret yok',
+      type: 'Tür',
+      status: 'Durum',
+      author: 'Yazar',
+      summary: 'Özet',
+      details: 'Ayrıntılar',
+      closeDetails: 'Ayrıntıları kapat',
+      label: 'Etiket',
+      comment: 'Yorum',
+      zoomTo: 'Yakınlaştır',
+      delete: 'Sil',
+      clear: 'Tümünü temizle',
+      statusValues: {
+        open: 'Açık',
+        question: 'Soru',
+        answered: 'Yanıtlandı',
+        closed: 'Kapalı'
+      }
+    },
+    missingResources: {
+      tab: 'Kaynaklar',
+      title: 'Eksik / Harici Kaynaklar',
+      fontTab: 'Yazı tipi',
+      imageTab: 'Görsel',
+      xrefTab: 'Harici Referanslar',
+      attach: 'Ekle',
+      attachDwg: 'DWG/DXF ekle...',
+      attachImage: 'Görüntü ekle...',
+      attachImageFailed: '"{name}" görüntüsü eklenemedi',
+      fileReferences: 'Dosya Referansları',
+      details: 'Ayrıntılar',
+      foundAt: 'Bulunduğu yer',
+      selectReference: 'Ayrıntıları görmek için bir referans seçin',
+      expandDetails: 'Ayrıntıları genişlet',
+      collapseDetails: 'Ayrıntıları daralt',
+      apply: 'Uygula',
+      applyDone: 'Değiştirmeler uygulandı',
+      emptyFonts: 'Eksik yazı tipi yok',
+      emptyImages: 'Eksik görsel yok',
+      matchFontType: 'Yazı tipi türünü eşleştir (SHX / mesh)',
+      missedFont: 'Eksik yazı tipi',
+      replacedFont: 'Yerine kullanılan yazı tipi',
+      selectFont: 'Yerine kullanılacak yazı tipini seçin',
+      selectLocalFont: 'Yerel yazı tipi dosyası seçin',
+      file: 'Dosya',
+      replace: 'Değiştir',
+      name: 'Ad',
+      path: 'Kayıtlı yol',
+      type: 'Tür',
+      typeAttach: 'Ekle',
+      typeOverlay: 'Kaplama',
+      typeImage: 'Görüntü',
+      status: 'Durum',
+      statusMissing: 'Eksik',
+      statusLoaded: 'Yüklendi',
+      actions: 'İşlemler',
+      visible: 'Görünür',
+      browse: 'Gözat…',
+      fromUrl: 'URL…',
+      unload: 'Kaldır',
+      load: 'Yükle',
+      empty: 'Bu çizimde harici referans veya görüntü yok',
+      urlPrompt: 'DWG veya DXF dosyasının URL’sini girin',
+      urlRequired: 'Lütfen bir URL girin',
+      loadFailed: '"{name}" referansı yüklenemedi'
+    },
+    memoryProfile: {
+      tab: 'Bellek',
+      title: 'Bellek Profili',
+      refresh: 'Yenile',
+      collecting: 'Bellek analiz ediliyor ...',
+      showPie: 'Özet grafiği göster',
+      hidePie: 'Özet grafiği gizle',
+      collectedAt: 'Toplama zamanı {time}',
+      heapUsed: 'JS yığını {used} / {total}',
+      estimateNote:
+        'Geometri boyutları tampon byteLength değerinden gelir. Diğer kategoriler tahmindir.',
+      estimated: 'tah.',
+      pieTotal: 'Hesaplanan',
+      pieAriaLabel: 'Kategoriye göre bellek dağılımı',
+      empty: 'Veri yok',
+      missedFonts: 'Eksik yazı tipleri',
+      fontMemory: 'Yazı tipi / mtext belleği',
+      fontMemorySummary: 'Bellek {live} (ana {main} · worker {workers})',
+      fontStorage: 'IndexedDB depolama (belleğe dahil değil)',
+      fontStorageSummary: '{count} önbellek yazı tipi · {size}',
+      materialPoint: 'Nokta',
+      materialLine: 'Çizgi',
+      materialFill: 'Dolgu',
+      materialTotal: 'Toplam',
+      dataModelCounts: '{entities} varlık · {objects} nesne · {total}',
+      dataModelCategories: 'Kategoriye göre',
+      dataModelEntityTypes: 'Varlık türüne göre',
+      categories: {
+        heap: 'JS Yığını',
+        geometry: 'Geometri',
+        mapping: 'Eşleme',
+        spatial: 'Uzamsal Dizin',
+        dataModel: 'Veri Modeli',
+        materials: 'Malzemeler',
+        fonts: 'Yazı Tipleri'
+      },
+      tabs: {
+        geometry: 'Geometri',
+        spatial: 'Uzamsal',
+        dataModel: 'Veri Modeli',
+        materials: 'Malzemeler',
+        fonts: 'Yazı Tipleri'
+      },
+      columns: {
+        layout: 'Düzen',
+        layer: 'Katman',
+        geometry: 'Geometri',
+        mapping: 'Eşleme',
+        entities: 'Varlıklar',
+        rootItems: 'Kök',
+        childItems: 'Alt',
+        estimated: 'Tah. boyut',
+        type: 'Tür',
+        count: 'Adet',
+        category: 'Kategori',
+        font: 'Yazı tipi'
+      }
+    },
+    openFileProfile: {
+      tab: 'Açılış',
+      title: 'Açılış Performansı',
+      refresh: 'Yenile',
+      copy: 'Kopyala',
+      copied: 'Performans verileri kopyalandı',
+      copyFailed: 'Performans verileri kopyalanamadı',
+      collectedAt: 'Toplama zamanı {time}',
+      hint: 'Son çizim açılışında otomatik toplanır. OPENPROF=1 konsola da yazar.',
+      noData:
+        'Henüz profil yok. Önce bir çizim açın, sonra OPENPERF çalıştırın.',
+      empty: 'Veri yok',
+      timing: 'Duvar saati zamanlaması',
+      progressive: 'Kademeli açılış',
+      progressiveMode: 'Mod',
+      progressiveOn: 'Açık',
+      progressiveOff: 'Kapalı',
+      midOpenPaints: 'Açılış sırası çizimler',
+      yields: 'Yield sayısı',
+      cache: 'INSERT render önbelleği (üst düzey)',
+      slowBlocks: 'En yavaş blok şablon missleri',
+      total: 'Toplam açılış',
+      read: 'db.read',
+      parse: 'PARSE',
+      entity: 'ENTITY flush',
+      convert: 'Sahne dönüşümü',
+      cacheHits: 'Önbellek isabet',
+      cacheMisses: 'Önbellek miss',
+      cacheBuild: 'Miss build',
+      cacheCompact: 'Miss compact',
+      cacheHitPath: 'Hit path',
+      columns: {
+        stage: 'Aşama',
+        duration: 'Süre',
+        share: 'Pay',
+        metric: 'Metrik',
+        value: 'Değer',
+        block: 'Blok',
+        build: 'Build',
+        compact: 'Compact'
+      }
+    },
+    blocks: {
+      tab: 'Bloklar',
+      title: 'Bloklar',
+      tabCurrentDrawing: 'Geçerli Çizim',
+      tabRecent: 'Son Kullanılanlar',
+      tabFavorites: 'Favoriler',
+      tabLibraries: 'Kitaplıklar',
+      sectionCurrentDrawing: 'Geçerli Çizim Blokları',
+      sectionRecent: 'Son Kullanılan Bloklar',
+      sectionFavorites: 'Favori Bloklar',
+      sectionLibraries: 'Blok Kitaplıkları',
+      filterPlaceholder: 'Filtrele...',
+      empty: 'Kullanılabilir blok yok',
+      emptyRecent: 'Son eklenen blok yok',
+      emptyFavorites: 'Favori blok yok',
+      emptyLibraries: 'Yapılandırılmış kitaplık yok',
+      toggleFavorite: 'Favoriyi değiştir',
+      options: 'Seçenekler',
+      insertionPoint: 'Ekleme Noktası',
+      scale: 'Ölçek',
+      rotation: 'Döndürme',
+      angle: 'Açı',
+      autoPlacement: 'Otomatik Yerleştirme',
+      repeatPlacement: 'Yerleştirmeyi Tekrarla',
+      explode: 'Patlat'
     }
   },
   colorDropdown: {

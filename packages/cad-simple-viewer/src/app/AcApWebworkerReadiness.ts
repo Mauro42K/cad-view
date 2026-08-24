@@ -1,23 +1,27 @@
 import type { AcApWebworkerFiles } from './AcApDocManager'
+import { MTEXT_RENDERER_WORKER_FILE } from './AcApWorkerAssets'
 
 /** Default worker script URLs used when `webworkerFileUrls` is omitted. */
-export const DEFAULT_WEBWORKER_FILE_URLS: Required<AcApWebworkerFiles> = {
-  dxfParser: './assets/dxf-parser-worker.js',
-  dwgParser: './assets/libredwg-parser-worker.js',
-  mtextRender: './assets/mtext-renderer-worker.js'
-}
+export const DEFAULT_WEBWORKER_FILE_URLS = {
+  mtextRender: `./assets/${MTEXT_RENDERER_WORKER_FILE}`
+} as const
 
 /**
- * Resolves configured worker URLs to strings, falling back to {@link DEFAULT_WEBWORKER_FILE_URLS}.
+ * Resolves configured worker URLs to strings for readiness probes.
+ *
+ * Always includes the MTEXT worker. Includes `dwgParser` only when the host
+ * provides one (DWG converters are optional / host-registered).
  */
 export function resolveWebworkerFileUrls(
   webworkerFileUrls?: AcApWebworkerFiles
 ): string[] {
-  return [
-    webworkerFileUrls?.dxfParser ?? DEFAULT_WEBWORKER_FILE_URLS.dxfParser,
-    webworkerFileUrls?.dwgParser ?? DEFAULT_WEBWORKER_FILE_URLS.dwgParser,
+  const urls = [
     webworkerFileUrls?.mtextRender ?? DEFAULT_WEBWORKER_FILE_URLS.mtextRender
-  ].map(url => String(url))
+  ]
+  if (webworkerFileUrls?.dwgParser) {
+    urls.push(webworkerFileUrls.dwgParser)
+  }
+  return urls.map(url => String(url))
 }
 
 let cachedReadinessKey: string | undefined

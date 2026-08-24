@@ -1,5 +1,6 @@
 import { AcDbObjectId, AcGeBox2d, AcGeBox3d } from '@mlightcad/data-model'
 import {
+  AcTrDirectEntityMeta,
   AcTrEntity,
   AcTrEntityPreview,
   AcTrGroup,
@@ -101,8 +102,27 @@ export class AcTrLayout {
   private _extentExcludedObjectIds: Set<AcDbObjectId>
   /** Map of layers indexed by layer name */
   private _layers: Map<string, AcTrLayer>
+  /**
+   * INSERT object id → INSERT's own layer name. Used when freezing an INSERT
+   * layer to hide fragments that were bucketed onto other layers.
+   */
+  private _insertLayerByObjectId: Map<AcDbObjectId, string>
   /** The flag indicating whether the layout is loaded/activated */
   private _isLoaded: boolean
+  /**
+   * True when this layout renders a read-only reference/overlay drawing.
+   * Reference layouts are not registered in {@link AcTrScene}'s layout map
+   * and must not participate in selection, grips, or host edits.
+   */
+  isReference = false
+  /**
+   * Last compare-display options applied to this layout. Replayed onto
+   * layers created after {@link setCompareDisplay} so late layer groups
+   * still receive role tints.
+   */
+  private _compareDisplayOptions?: Parameters<
+    AcTrLayer['setCompareDisplay']
+  >[0]
 
   /**
    * Creates a new layout instance.
@@ -115,6 +135,7 @@ export class AcTrLayout {
     this._boxDirty = true
     this._extentExcludedObjectIds = new Set()
     this._layers = new Map()
+    this._insertLayerByObjectId = new Map()
     this._isLoaded = false
   }
 
@@ -216,6 +237,13 @@ export class AcTrLayout {
   }
 
   /**
+   * Approximate spatial-index memory / cardinality stats for this layout.
+   */
+  get spatialIndexStats() {
+    return this._spatialIndex.getStats()
+  }
+
+  /**
    * The statistics of this layout.
    * Provides detailed information about memory usage and entity counts.
    */
@@ -284,6 +312,7 @@ export class AcTrLayout {
     this._cachedBox.makeEmpty()
     this._boxDirty = true
     this._extentExcludedObjectIds.clear()
+    this._insertLayerByObjectId.clear()
     this._spatialIndex.clear()
     return this
   }
@@ -346,6 +375,11 @@ export class AcTrLayout {
 
     layer.addEntity(entity)
 
+    const insertLayerName = entity.userData.insertLayerName
+    if (insertLayerName) {
+      this._insertLayerByObjectId.set(entity.objectId, insertLayerName)
+    }
+
     if (!extendBbox) {
       this._extentExcludedObjectIds.add(entity.objectId)
     } else {
@@ -356,6 +390,42 @@ export class AcTrLayout {
     this.registerEntitySpatialIndex(entity)
 
     return this
+  }
+
+  /**
+   * Adds an entity via direct batch append (no temporary drawable tree).
+   *
+   * @returns `true` when geometry and spatial index were registered.
+   */
+  addDirectEntity(
+    meta: AcTrDirectEntityMeta,
+    extendBbox: boolean = true
+  ): boolean {
+    if (!meta.objectId) {
+      throw new Error('Object id is required to add one entity!')
+    }
+    if (!meta.layerName) {
+      throw new Error('Layer name is required to add one entity!')
+    }
+
+    const layer = this._layers.get(meta.layerName)
+    if (!layer) {
+      throw new Error(`layer '${meta.layerName}' doesn't exist!`)
+    }
+
+    const appended = layer.addDirectEntity(meta)
+    if (!appended) {
+      return false
+    }
+
+    if (!extendBbox) {
+      this._extentExcludedObjectIds.add(meta.objectId)
+    } else {
+      this._extentExcludedObjectIds.delete(meta.objectId)
+    }
+    this.invalidateBox()
+    this.registerSpatialIndexBox(meta.objectId, meta.wcsBbox)
+    return true
   }
 
   /**
@@ -374,6 +444,7 @@ export class AcTrLayout {
     if (result) {
       this._spatialIndex.removeById(objectId)
       this._extentExcludedObjectIds.delete(objectId)
+      this._insertLayerByObjectId.delete(objectId)
       this.invalidateBox()
     }
     return result
@@ -388,6 +459,10 @@ export class AcTrLayout {
   updateEntity(entity: AcTrEntity) {
     for (const [_, layer] of this._layers) {
       if (layer.updateEntity(entity)) {
+        const insertLayerName = entity.userData.insertLayerName
+        if (insertLayerName) {
+          this._insertLayerByObjectId.set(entity.objectId, insertLayerName)
+        }
         this._spatialIndex.removeById(entity.objectId)
         this.registerEntitySpatialIndex(entity)
         this.invalidateBox()
@@ -632,6 +707,9 @@ export class AcTrLayout {
       layer = new AcTrLayer(info)
       this._layers.set(name, layer)
       this._group.add(layer.internalObject)
+      if (this._compareDisplayOptions) {
+        layer.setCompareDisplay(this._compareDisplayOptions)
+      }
     }
     return layer
   }
@@ -652,6 +730,48 @@ export class AcTrLayout {
       }
     }
     return layer
+  }
+
+  /**
+   * Applies AutoCAD INSERT-layer freeze semantics across decomposed fragments.
+   *
+   * Freezing the INSERT's own layer hides every scene bucket that shares that
+   * INSERT object id, including geometry bucketed onto other layers — even when
+   * the INSERT has no fragment on its own layer (only other-layer buckets).
+   * Thawing restores those other-layer buckets (the INSERT layer group
+   * visibility is handled separately by {@link updateLayer}).
+   *
+   * @param insertLayerName - Layer being frozen or thawed.
+   * @param frozen - True when the layer is now frozen.
+   * @returns Object ids whose cross-layer visibility was changed.
+   */
+  applyInsertLayerFreeze(
+    insertLayerName: string,
+    frozen: boolean
+  ): AcDbObjectId[] {
+    const touched: AcDbObjectId[] = []
+    for (const [objectId, layerName] of this._insertLayerByObjectId) {
+      if (layerName !== insertLayerName) {
+        continue
+      }
+      let changed = false
+      for (const layer of this.getLayersByObjectId(objectId)) {
+        // INSERT-layer bucket visibility comes from the layer group itself.
+        if (layer.name === insertLayerName) {
+          continue
+        }
+        if (layer.setEntityVisible(objectId, !frozen)) {
+          changed = true
+        }
+      }
+      if (changed) {
+        touched.push(objectId)
+      }
+    }
+    if (touched.length > 0) {
+      this.invalidateBox()
+    }
+    return touched
   }
 
   /**
@@ -700,6 +820,16 @@ export class AcTrLayout {
     this.applyHighlightToLayers(ids, (layer, entityIds) =>
       layer.unselect(entityIds)
     )
+  }
+
+  /**
+   * Applies compare-display coloring across all layers in this layout.
+   *
+   * @param options - Compare colors and per-entity role overrides.
+   */
+  setCompareDisplay(options: Parameters<AcTrLayer['setCompareDisplay']>[0]) {
+    this._compareDisplayOptions = options
+    this._layers.forEach(layer => layer.setCompareDisplay(options))
   }
 
   /**
@@ -893,5 +1023,18 @@ export class AcTrLayout {
       // If it is one block group, build spatial index for entities in this block.
       this._spatialIndex.createChildIndex(entity)
     }
+  }
+
+  /**
+   * Registers a simple axis-aligned WCS box in the spatial index by object id.
+   */
+  private registerSpatialIndexBox(objectId: AcDbObjectId, wcsBbox: THREE.Box3) {
+    this._spatialIndex.insert({
+      minX: wcsBbox.min.x,
+      minY: wcsBbox.min.y,
+      maxX: wcsBbox.max.x,
+      maxY: wcsBbox.max.y,
+      id: objectId
+    })
   }
 }

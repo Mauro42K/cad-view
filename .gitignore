@@ -46,7 +46,3 @@ Thumbs.db
 
 .nx/cache
 .nx/workspace-data
-
-# Downstream local operation
-.vercel
-local-test-files/

@@ -1,4 +1,7 @@
-import { registerLazyHtmlPlugin } from '@mlightcad/cad-html-plugin/register'
+import {
+  type AcApHtmlPluginOptions,
+  registerLazyHtmlPlugin
+} from '@mlightcad/cad-html-plugin/register'
 import { registerLazyPdfPlugin } from '@mlightcad/cad-pdf-plugin/register'
 import {
   AcApDocManager,
@@ -10,23 +13,32 @@ import { registerLazySvgPlugin } from '@mlightcad/cad-svg-plugin/register'
 import { markRaw } from 'vue'
 
 import {
+  AcApAttDefCmd,
+  AcApAttEditCmd,
+  AcApCountListCmd,
   AcApDrawingUnitsCmd,
   AcApExportHtmlDlgCmd,
+  AcApInsertPaletteCmd,
   AcApLayerStateCmd,
+  AcApMarkupPanelCmd,
+  AcApMemCmd,
   AcApMissedDataCmd,
+  AcApOpenPerfCmd,
   AcApPointStyleCmd,
   AcApPropertiesCmd,
   AcApQSelectCmd,
   AcApTextStyleCmd,
+  AcApXrefCmd,
   hatchRibbonCommand
 } from '../command'
 import {
   createMlColorIndexPickerToolbarFactory,
+  MlAttDefDlg,
+  MlAttEditDlg,
   MlDrawingUnitsDlg,
   MlExportHtmlDlg,
   MlPointStyleDlg,
   MlQuickSelectDlg,
-  MlReplacementDlg,
   MlTextStyleDlg
 } from '../component'
 import { useDialogManager } from '../composable'
@@ -54,6 +66,12 @@ export const registerCmds = () => {
       'md',
       'md',
       new AcApMissedDataCmd()
+    )
+    register.addCommand(
+      AcEdCommandStack.SYSTEMT_COMMAND_GROUP_NAME,
+      'xref',
+      'xref',
+      new AcApXrefCmd()
     )
     register.addCommand(
       AcEdCommandStack.SYSTEMT_COMMAND_GROUP_NAME,
@@ -87,10 +105,57 @@ export const registerCmds = () => {
     )
     register.addCommand(
       AcEdCommandStack.SYSTEMT_COMMAND_GROUP_NAME,
+      'insert',
+      'insert',
+      new AcApInsertPaletteCmd(),
+      'blockspalette'
+    )
+    register.addCommand(
+      AcEdCommandStack.SYSTEMT_COMMAND_GROUP_NAME,
+      'countlist',
+      'countlist',
+      new AcApCountListCmd()
+    )
+    register.addCommand(
+      AcEdCommandStack.SYSTEMT_COMMAND_GROUP_NAME,
+      'markuppanel',
+      'markuppanel',
+      new AcApMarkupPanelCmd()
+    )
+    register.addCommand(
+      AcEdCommandStack.SYSTEMT_COMMAND_GROUP_NAME,
+      'mem',
+      'mem',
+      new AcApMemCmd(),
+      'memstat'
+    )
+    register.addCommand(
+      AcEdCommandStack.SYSTEMT_COMMAND_GROUP_NAME,
+      'openperf',
+      'openperf',
+      new AcApOpenPerfCmd(),
+      ['openprofile', 'openprofui']
+    )
+    register.addCommand(
+      AcEdCommandStack.SYSTEMT_COMMAND_GROUP_NAME,
       'style',
       'style',
       new AcApTextStyleCmd(),
       'st'
+    )
+    register.addCommand(
+      AcEdCommandStack.SYSTEMT_COMMAND_GROUP_NAME,
+      'attedit',
+      'attedit',
+      new AcApAttEditCmd(),
+      ['eattedit', 'ate']
+    )
+    register.addCommand(
+      AcEdCommandStack.SYSTEMT_COMMAND_GROUP_NAME,
+      'attdef',
+      'attdef',
+      new AcApAttDefCmd(),
+      'ddattdef'
     )
     isCommandRegistered = true
   }
@@ -100,11 +165,6 @@ let isDialogRegistered = false
 export const registerDialogs = () => {
   if (!isDialogRegistered) {
     const { registerDialog } = useDialogManager()
-    registerDialog({
-      name: 'ReplacementDlg',
-      component: markRaw(MlReplacementDlg),
-      props: {}
-    })
     registerDialog({
       name: 'PointStyleDlg',
       component: markRaw(MlPointStyleDlg),
@@ -128,6 +188,16 @@ export const registerDialogs = () => {
     registerDialog({
       name: 'TextStyleDlg',
       component: markRaw(MlTextStyleDlg),
+      props: {}
+    })
+    registerDialog({
+      name: 'AttEditDlg',
+      component: markRaw(MlAttEditDlg),
+      props: {}
+    })
+    registerDialog({
+      name: 'AttDefDlg',
+      component: markRaw(MlAttDefDlg),
       props: {}
     })
     isDialogRegistered = true
@@ -177,21 +247,33 @@ const registerAgentIntegration = async (pluginManager: AcApPluginManager) => {
 }
 
 /**
+ * Options for {@link registerLazyPlugins}.
+ */
+export interface RegisterLazyPluginsOptions {
+  /** Options passed to {@link registerLazyHtmlPlugin} (HTML export only). */
+  htmlPlugin?: AcApHtmlPluginOptions
+}
+
+/**
  * Registers lazy plugins that load on first use of their trigger commands.
  *
  * Currently registers the PDF plugin (`cpdf`, `ipdf`), the HTML export
  * plugin (`-chtml`), the SVG export plugin (`csvg`), and optionally the CAD
  * Agent plugin (`agent`) when `@mlightcad/cad-agent-plugin` is installed.
  * Safe to call multiple times; registration runs once per application lifetime.
+ *
+ * @param options - Optional HTML plugin settings such as `viewerRuntimeUrl`
  */
-export const registerLazyPlugins = () => {
+export const registerLazyPlugins = (
+  options: RegisterLazyPluginsOptions = {}
+) => {
   if (isLazyPluginRegistered) {
     return
   }
 
   const pluginManager = AcApDocManager.instance.pluginManager
   registerLazyPdfPlugin(pluginManager)
-  registerLazyHtmlPlugin(pluginManager)
+  registerLazyHtmlPlugin(pluginManager, options.htmlPlugin)
   registerLazySvgPlugin(pluginManager)
 
   if (!isAgentIntegrationStarted) {

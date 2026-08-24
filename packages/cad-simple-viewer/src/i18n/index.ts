@@ -1,5 +1,11 @@
 import { AcEdCommandStack } from '../editor'
 import { AcApI18n, AcApLocale } from './AcApI18n'
+import arCommand from './ar/command'
+import arJig from './ar/jig'
+import arMain from './ar/main'
+import csCommand from './cs/command'
+import csJig from './cs/jig'
+import csMain from './cs/main'
 import enCommand from './en/command'
 import enJig from './en/jig'
 import enMain from './en/main'
@@ -25,6 +31,16 @@ AcApI18n.mergeLocaleMessage('tr', {
   command: trCommand,
   jig: trJig,
   main: trMain
+})
+AcApI18n.mergeLocaleMessage('cs', {
+  command: csCommand,
+  jig: csJig,
+  main: csMain
+})
+AcApI18n.mergeLocaleMessage('ar', {
+  command: arCommand,
+  jig: arJig,
+  main: arMain
 })
 
 export const cmdDescription = (groupName: string, cmdName: string) => {

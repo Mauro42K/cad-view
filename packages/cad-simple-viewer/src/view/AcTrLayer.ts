@@ -2,12 +2,14 @@ import { AcDbObjectId, AcGiSubEntityTraits } from '@mlightcad/data-model'
 import {
   AcTrBatchedGroup,
   AcTrBatchedGroupStats,
+  AcTrDirectEntityMeta,
   AcTrEntity,
   AcTrPreviewSubsetOptions,
   AcTrRenderer,
   AcTrStyleManager
 } from '@mlightcad/three-renderer'
 import * as THREE from 'three'
+import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js'
 
 import { AcEdLayerInfo } from '../editor'
 
@@ -338,6 +340,53 @@ export class AcTrLayer {
   }
 
   /**
+   * Appends pre-built geometry directly into the layer batch (line / point / mesh).
+   *
+   * @returns `true` when the geometry was registered in the batched group.
+   */
+  addDirectEntity(meta: AcTrDirectEntityMeta): boolean {
+    const options = {
+      objectId: meta.objectId,
+      visible: meta.visible,
+      position: meta.position
+    }
+    let appended = false
+    if (meta.kind === 'lineFat') {
+      appended = this._group.appendLine2Geometry(
+        meta.geometry as LineSegmentsGeometry,
+        meta.material,
+        meta.worldOffset,
+        options
+      )
+    } else if (meta.kind === 'lineBasic') {
+      appended = this._group.appendLineGeometry(
+        meta.geometry as THREE.BufferGeometry,
+        meta.material,
+        meta.worldOffset,
+        options
+      )
+    } else if (meta.kind === 'point') {
+      appended = this._group.appendPointGeometry(
+        meta.geometry as THREE.BufferGeometry,
+        meta.material,
+        meta.worldOffset,
+        options
+      )
+    } else if (meta.kind === 'mesh') {
+      appended = this._group.appendMeshGeometry(
+        meta.geometry as THREE.BufferGeometry,
+        meta.material,
+        meta.worldOffset,
+        options
+      )
+    }
+    if (appended) {
+      this._boxDirty = true
+    }
+    return appended
+  }
+
+  /**
    * Return true if the object with the specified object id is intersected with the ray by using raycast.
    * @param objectId  Input object id of object to check for intersection with the ray.
    * @param raycaster Input raycaster to check intersection
@@ -446,5 +495,16 @@ export class AcTrLayer {
       return
     }
     this._group.unselectMany(ids)
+  }
+
+  /**
+   * Applies compare-display coloring to entities in this layer.
+   *
+   * @param options - Compare colors and per-entity role overrides.
+   */
+  setCompareDisplay(
+    options: Parameters<AcTrBatchedGroup['setCompareDisplay']>[0]
+  ) {
+    this._group.setCompareDisplay(options)
   }
 }

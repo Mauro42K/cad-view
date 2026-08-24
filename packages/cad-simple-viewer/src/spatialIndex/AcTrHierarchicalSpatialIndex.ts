@@ -4,7 +4,8 @@ import { AcTrGroup } from '@mlightcad/three-renderer'
 import {
   AcEdSpatialQueryResultItem,
   AcEdSpatialQueryResultItemEx,
-  unionSpatialQueryItems
+  unionSpatialQueryItems,
+  uniquifySpatialItemIds
 } from '../editor/view/AcEdSpatialQueryResult'
 import { isFiniteSpatialBBox } from '../view/AcTrGroupWcsBboxAssert'
 import { AcTrLinearSpatialIndex } from './AcTrLinearSpatialIndex'
@@ -12,6 +13,7 @@ import { AcTrRBushSpatialIndex } from './AcTrRBushSpatialIndex'
 import {
   AcTrSpatialIndex,
   AcTrSpatialIndexBBox,
+  AcTrSpatialIndexStats,
   AcTrSpatialSearchOptions,
   isSpatialBoxFullyInside
 } from './AcTrSpatialIndex'
@@ -283,6 +285,39 @@ export class AcTrHierarchicalSpatialIndex implements AcTrSpatialIndex {
   }
 
   /**
+   * Aggregates memory / cardinality stats from the root index and all children.
+   */
+  getStats(): AcTrSpatialIndexStats {
+    const rootStats = this.rootIndex.getStats()
+    let childItemCount = 0
+    let childBytes = 0
+    let rbushChildCount = 0
+    let linearChildCount = 0
+
+    for (const child of this.childIndexes.values()) {
+      const childStats = child.getStats()
+      childItemCount += childStats.itemCount
+      childBytes += childStats.estimatedBytes
+      if (childStats.kind === 'rbush') rbushChildCount++
+      else if (childStats.kind === 'linear') linearChildCount++
+    }
+
+    // Child-index Map overhead (string id keys + pointers).
+    const childMapBytes = this.childIndexes.size * 64
+
+    return {
+      kind: 'hierarchical',
+      itemCount: rootStats.itemCount,
+      estimatedBytes: rootStats.estimatedBytes + childBytes + childMapBytes,
+      rootItemCount: rootStats.itemCount,
+      childIndexCount: this.childIndexes.size,
+      childItemCount,
+      rbushChildCount,
+      linearChildCount
+    }
+  }
+
+  /**
    * Ensures a second-level index exists for a root id and optionally initializes it.
    *
    * Behavior:
@@ -302,7 +337,9 @@ export class AcTrHierarchicalSpatialIndex implements AcTrSpatialIndex {
     id: AcDbObjectId,
     items: readonly AcEdSpatialQueryResultItem[]
   ) {
-    const finiteItems = items.filter(isFiniteSpatialBBox)
+    const finiteItems = uniquifySpatialItemIds(
+      items.filter(isFiniteSpatialBBox)
+    )
     if (finiteItems.length === 0) {
       return undefined
     }
