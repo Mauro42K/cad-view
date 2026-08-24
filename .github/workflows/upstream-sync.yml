@@ -23,6 +23,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
       - name: Fetch upstream and downstream main
         run: |
           git remote add upstream "https://github.com/${UPSTREAM_REPOSITORY}.git"
@@ -68,8 +73,9 @@ jobs:
           run_check corepack prepare pnpm@10.33.4 --activate
           run_check pnpm install --frozen-lockfile
           run_check pnpm lint
-          run_check pnpm test
+          export NODE_OPTIONS="--max-old-space-size=4096"
           run_check pnpm build
+          run_check pnpm test
 
       - name: Check upstream/downstream ancestry
         id: topology
@@ -153,8 +159,9 @@ jobs:
           run_check corepack prepare pnpm@10.33.4 --activate
           run_check pnpm install --frozen-lockfile
           run_check pnpm lint
-          run_check pnpm test
+          export NODE_OPTIONS="--max-old-space-size=4096"
           run_check pnpm build
+          run_check pnpm test
 
       - name: Push synchronization branch
         if: steps.reconcile.outputs.changed == 'true'
