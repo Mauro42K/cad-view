@@ -63,6 +63,7 @@ import {
   AcApMeasureAngleCmd,
   AcApMeasureArcCmd,
   AcApMeasureAreaCmd,
+  AcApMeasureContinuousCmd,
   AcApMeasureDistanceCmd,
   AcApMeasurementExportCmd,
   AcApMeasurementImportCmd,
@@ -79,6 +80,7 @@ import {
   AcApPolylineCmd,
   AcApQNewCmd,
   AcApRayCmd,
+  AcApReadingModeCmd,
   AcApRectCmd,
   AcApRedoCmd,
   AcApRegenCmd,
@@ -186,7 +188,8 @@ const DEFAULT_COMMAND_ALIASES: Record<string, string[]> = {
   XLINE: ['XL'],
   ZOOM: ['Z'],
   UNDO: ['U'],
-  REDO: ['REDO']
+  REDO: ['REDO'],
+  READINGMODE: ['RM']
 }
 
 /**
@@ -1367,6 +1370,42 @@ export class AcApDocManager {
   }
 
   /**
+   * Whether transient reading mode is active on a view (default: current view).
+   *
+   * @param view - Target canvas; defaults to {@link curView}.
+   */
+  isReadingModeEnabled(view?: AcTrView2d): boolean {
+    const target = view ?? (this.curView as AcTrView2d)
+    return target.readingModeEnabled
+  }
+
+  /**
+   * Enables or disables transient reading mode on a view (default: current view).
+   *
+   * Reading mode forces black linework on a white canvas without modifying the
+   * drawing database. It shares the compare-display colour path, so it is
+   * mutually exclusive with active compare display on that view.
+   *
+   * @param enabled - When true, enables reading mode; when false, restores the
+   *   previous canvas background and entity colours.
+   * @param view - Target canvas; defaults to {@link curView}.
+   */
+  setReadingMode(enabled: boolean, view?: AcTrView2d): void {
+    const target = view ?? (this.curView as AcTrView2d)
+    target.setReadingMode(enabled)
+  }
+
+  /**
+   * Toggles transient reading mode on a view (default: current view).
+   *
+   * @param view - Target canvas; defaults to {@link curView}.
+   */
+  toggleReadingMode(view?: AcTrView2d): void {
+    const target = view ?? (this.curView as AcTrView2d)
+    target.toggleReadingMode()
+  }
+
+  /**
    * Applies compare-display coloring to one overlay layout.
    *
    * @param overlayId - Id returned by {@link loadOverlay} / {@link registerOverlayDatabase}.
@@ -1611,6 +1650,11 @@ export class AcApDocManager {
       'measuredistance',
       new AcApMeasureDistanceCmd()
     )
+    addSystemCommand(
+      'measurecontinuous',
+      'measurecontinuous',
+      new AcApMeasureContinuousCmd()
+    )
     addSystemCommand('measurearea', 'measurearea', new AcApMeasureAreaCmd())
     addSystemCommand('measureangle', 'measureangle', new AcApMeasureAngleCmd())
     addSystemCommand('measurearc', 'measurearc', new AcApMeasureArcCmd())
@@ -1695,6 +1739,7 @@ export class AcApDocManager {
     addSystemCommand('sketch', 'sketch', new AcApSketchCmd())
     addSystemCommand('spline', 'spline', new AcApSplineCmd())
     addSystemCommand('switchbg', 'switchbg', new AcApSwitchBgCmd())
+    addSystemCommand('readingmode', 'readingmode', new AcApReadingModeCmd())
     addSystemCommand(
       'unisolateobjects',
       'unisolateobjects',
@@ -1914,15 +1959,18 @@ export class AcApDocManager {
     // so its `commandEnded` lifecycle finishes before the new one begins.
     await this._commandManager.cancelActive()
 
-    const promise = cmd.trigger(this.context).finally(() => {
-      if (!options.preserveScriptInputs) {
-        this.editor.clearScriptInputs()
+    // markActive must run before trigger(): the first getPoint prompt is
+    // opened synchronously until the first await, and the mobile session
+    // accessory reads commandManager.activeCommand.
+    await this._commandManager.runActive(cmd, this.curView, async () => {
+      try {
+        await cmd.trigger(this.context)
+      } finally {
+        if (!options.preserveScriptInputs) {
+          this.editor.clearScriptInputs()
+        }
       }
-      this._commandManager.clearActive(cmd)
     })
-    this._commandManager.markActive(cmd, this.curView, promise)
-
-    await promise
   }
 
   /**
@@ -1998,6 +2046,7 @@ export class AcApDocManager {
       // Drop overlay / markup history before view.clear() disposes HTML.
       resetMeasurementSession()
       resetMarkupSession()
+      AcApZoomCmd.clearOriginalViews()
       this.openProgressView.clear()
     }
     this.openProgressView.bindDrawDatabase(this.context.doc.database)
@@ -2083,8 +2132,10 @@ export class AcApDocManager {
       const openViewMode = this.resolveOpenViewMode(options)
 
       const progressiveRendering = options?.progressiveRendering ?? false
+      let framedSynchronously = false
       if (isPaperSpaceActive && layoutLimits && !layoutLimits.isEmpty()) {
         view.zoomTo(layoutLimits)
+        framedSynchronously = true
       } else if (openViewMode === AcApOpenViewMode.Extents) {
         if (progressiveRendering) {
           view.beginProgressiveOpenFit()
@@ -2100,8 +2151,10 @@ export class AcApDocManager {
 
         if (activeModelViewBox) {
           view.zoomTo(activeModelViewBox)
+          framedSynchronously = true
         } else if (this.hasUsableDrawingExtents(db)) {
           view.zoomTo(new AcGeBox2d(db.extmin, db.extmax))
+          framedSynchronously = true
         } else {
           if (progressiveRendering) {
             view.beginProgressiveOpenFit()
@@ -2122,6 +2175,11 @@ export class AcApDocManager {
       // above relies on `curView` being an `AcTrView2d`, and the
       // markLayoutAsInitialized method is part of that contract.
       view.markLayoutAsInitialized(db.currentSpaceId)
+      // `zoomToFitDrawing` frames asynchronously; capture original view in
+      // its completion callback instead of here (pre-fit camera is wrong).
+      if (framedSynchronously) {
+        AcApZoomCmd.rememberOriginalView(view, db.currentSpaceId)
+      }
       // OPENPROF: db.read is done; wait for batchConvert to drain, then print.
       this._openFileProfiler.markReadCompleteAndScheduleReport(view)
     } else {

@@ -86,6 +86,11 @@ describe('AcExHtmlI18n', () => {
   it('translates messages with parameters', () => {
     const i18n = new AcExHtmlI18n('zh')
     expect(i18n.t('status.distance', { value: '12.5' })).toBe('距离：12.5')
+    expect(i18n.t('toolbar.measurementPanel')).toBe('看结果')
+    expect(i18n.t('measurePanel.empty')).toBe('暂无测量')
+    expect(i18n.t('measurePanel.filterArc')).toBe('弧长')
+    expect(i18n.t('session.confirm')).toBe('确定')
+    expect(i18n.t('session.undo')).toBe('撤销')
     expect(formatAcExHtmlMessage('Zoom: {name}', { name: '0' })).toBe('Zoom: 0')
   })
 
@@ -120,5 +125,9 @@ describe('AcExHtmlI18n', () => {
     expect(i18n.t('layers.zoomTo', { name: 'Duvarlar' })).toBe(
       'Duvarlar katmanına yakınlaştır'
     )
+    expect(i18n.t('review.zoomTo')).toBe('Yakınlaştır')
+    expect(i18n.t('review.closeDetails')).toBe('Ayrıntıları kapat')
+    expect(i18n.t('toolbar.measurementPanel')).toBe('Sonuç')
+    expect(i18n.t('measurePanel.title')).toBe('Ölçümler')
   })
 })

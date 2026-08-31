@@ -17,6 +17,7 @@ import type { AcTrSpatialSearchOptions } from '../../spatialIndex/AcTrSpatialInd
 import { AcEdCorsorType, AcEdSelectionSet } from '../input'
 import { AcEditor } from '../input/AcEditor'
 import { AcEdOsnapResolver } from '../input/AcEdOsnapResolver'
+import { AcEdMarkerManager } from '../input/marker'
 import { AcEdHoverController } from './AcEdHoverController'
 import {
   AcEdSelectionAction,
@@ -71,6 +72,21 @@ export interface AcEdViewHoverEventArgs {
    * Object id of the hovered entity
    */
   id: AcDbObjectId
+}
+
+/**
+ * Screen-fixed snap-loupe overlay: CSS rectangle on the canvas plus the
+ * world box shown inside it.
+ */
+export interface AcEdSnapLoupeViewState {
+  /** Canvas-local left of the loupe (CSS pixels). */
+  x: number
+  /** Canvas-local top of the loupe (CSS pixels). */
+  y: number
+  /** Width and height of the square loupe (CSS pixels). */
+  size: number
+  /** World-space box mapped onto the loupe. */
+  viewBox: AcGeBox2d
 }
 
 /**
@@ -218,6 +234,12 @@ export abstract class AcEdBaseView {
    * the canvas bounding-rect origin (`viewportToCanvas`).
    */
   private _curMousePos: AcGePoint2d
+  /**
+   * True after at least one mouse or pointer sample has updated
+   * {@link curMousePos}. Touch devices never fire `mousemove` until a finger
+   * is down, so the default `(0, 0)` must not be treated as a real cursor.
+   */
+  private _hasCursorPos = false
   /** Set of currently selected entities */
   private _selectionSet: AcEdSelectionSet
   /**
@@ -246,6 +268,9 @@ export abstract class AcEdBaseView {
 
   /** Resolves object snap points using this view's pick and coordinate APIs. */
   private _osnapResolver: AcEdOsnapResolver
+
+  /** OSNAP markers shown while dragging overlay measurement / markup grips. */
+  private _overlayGripOsnapMarkers: AcEdMarkerManager | null = null
 
   /** The HTML canvas element for rendering */
   protected _canvas: HTMLCanvasElement
@@ -288,10 +313,21 @@ export abstract class AcEdBaseView {
     this._height = rect.height
     this._curPos = new AcGePoint2d()
     this._curMousePos = new AcGePoint2d()
+    this._hasCursorPos = false
     this._selectionSet = new AcEdSelectionSet()
     this._editor = new AcEditor(this)
     this._osnapResolver = new AcEdOsnapResolver(this)
     this._canvas.addEventListener('mousemove', event => this.onMouseMove(event))
+    // Touch does not fire `mousemove`. Keep cursor (and therefore the next
+    // point-prompt preview) in sync with the finger, otherwise `curMousePos`
+    // stays at canvas (0, 0) — the top-left of the view. Mouse already has
+    // `mousemove`; do not also handle pointer events or hover runs twice.
+    this._canvas.addEventListener('pointerdown', event => {
+      if (event.pointerType === 'touch') this.onMouseMove(event)
+    })
+    this._canvas.addEventListener('pointermove', event => {
+      if (event.pointerType === 'touch') this.onMouseMove(event)
+    })
     this._canvas.addEventListener('mousedown', event => {
       if (event.button === 1) {
         // Middle mouse button (button === 1)
@@ -967,6 +1003,27 @@ export abstract class AcEdBaseView {
   }
 
   /**
+   * Whether {@link curMousePos} has been set by a real pointer sample.
+   *
+   * @returns False until the first mouse or pointer event on the canvas.
+   */
+  get hasCursorPos() {
+    return this._hasCursorPos
+  }
+
+  /**
+   * Marks {@link curMousePos} as stale so the next point prompt does not
+   * treat a leftover touch sample as a live cursor.
+   *
+   * Touch picking commits on `pointerup`. The finger position must not seed
+   * the following prompt's jig (that would draw a short segment next to the
+   * pick). The next real pointer sample sets this flag again.
+   */
+  clearCursorPos() {
+    this._hasCursorPos = false
+  }
+
+  /**
    * The selection set in current view.
    */
   get selectionSet() {
@@ -997,6 +1054,71 @@ export abstract class AcEdBaseView {
     return this._osnapResolver
   }
 
+  /**
+   * Enables or disables camera pan/zoom (OrbitControls) for this view.
+   * Default is a no-op; {@link AcTrView2d} toggles the active layout controls.
+   *
+   * @param _enabled - When false, the user cannot pan or zoom this view.
+   */
+  setNavigationEnabled(_enabled: boolean): void {
+    // Optional; 2D view overrides this.
+  }
+
+  /**
+   * Shows or hides the screen-fixed snap loupe overlay viewport.
+   * Pass `null` to hide. Default is a no-op.
+   *
+   * @param _state - Loupe screen rectangle and world box, or `null` to hide.
+   */
+  setSnapLoupe(_state: AcEdSnapLoupeViewState | null): void {
+    // Optional; 2D view overrides this.
+  }
+
+  /**
+   * Resolves a world XY cursor through object snap and updates overlay grip
+   * snap markers. Used by HTML overlay endpoint drags (measure / markup).
+   *
+   * @param cursor - Raw world XY under the pointer.
+   * @param lastPoint - Grip origin passed to the osnap resolver as lastPoint.
+   * @returns Snapped world XY, or `cursor` when nothing is in aperture.
+   */
+  resolveOverlayGripPoint(
+    cursor: { x: number; y: number },
+    lastPoint?: { x: number; y: number }
+  ): { x: number; y: number } {
+    const cursorWcs = { x: cursor.x, y: cursor.y, z: 0 }
+    this._overlayGripOsnapMarkers ??= new AcEdMarkerManager(this)
+    this._overlayGripOsnapMarkers.hideMarker()
+    const snapPoint = this._osnapResolver.resolve({
+      cursorWcs,
+      lastPoint: lastPoint
+        ? { x: lastPoint.x, y: lastPoint.y, z: 0 }
+        : cursorWcs
+    })
+    this._overlayGripOsnapMarkers.setHintMarkers(
+      AcEdOsnapResolver.displayCenterMarks(
+        this._osnapResolver.acquiredCenterMarks,
+        snapPoint
+      )
+    )
+    if (snapPoint) {
+      this._overlayGripOsnapMarkers.showMarker(
+        snapPoint,
+        AcEdOsnapResolver.osnapModeToMarkerType(snapPoint.type)
+      )
+      return { x: snapPoint.x, y: snapPoint.y }
+    }
+    return { x: cursor.x, y: cursor.y }
+  }
+
+  /**
+   * Hides overlay grip snap markers and clears acquired centers.
+   */
+  clearOverlayGripOsnap(): void {
+    this._overlayGripOsnapMarkers?.clear()
+    this._osnapResolver.clearAcquiredCenters()
+  }
+
   protected onWindowResize() {
     if (this._calculateSizeCallback) {
       const { width, height } = this._calculateSizeCallback()
@@ -1020,11 +1142,14 @@ export abstract class AcEdBaseView {
   }
 
   /**
-   * Mouse move event handler.
-   * @param event Input mouse event argument
+   * Pointer sample handler. Updates canvas-local and world cursor from mouse
+   * or touch coordinates.
+   *
+   * @param event - Mouse or pointer event with client coordinates.
    */
-  private onMouseMove(event: MouseEvent) {
+  private onMouseMove(event: MouseEvent | PointerEvent) {
     // Keep one canonical conversion path for all view input code.
+    this._hasCursorPos = true
     this._curMousePos = this.viewportToCanvas({
       x: event.clientX,
       y: event.clientY

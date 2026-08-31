@@ -2,7 +2,10 @@ import {
   acExComputeLeaderTipOnShape,
   acExHitTestMarkupShapeOutline,
   acExIsAttachableShapeMarkup,
-  acExMarkupShapeOutlineFromGeometry
+  acExMarkupBounds,
+  acExMarkupFocusExtents,
+  acExMarkupShapeOutlineFromGeometry,
+  acExOverlayArrowSize
 } from '../src/AcExMarkupGeometry'
 import type { AcExMarkupGeometry } from '../src/AcExMarkupTypes'
 
@@ -97,5 +100,55 @@ describe('acExMarkupShapeOutlineFromGeometry', () => {
       corner1: { x: 1, y: 2 },
       corner2: { x: 3, y: 4 }
     })
+  })
+})
+
+describe('acExMarkupBounds', () => {
+  it('unions a cloud AABB with its attached leader and text-box anchor', () => {
+    expect(
+      acExMarkupBounds({
+        type: 'cloud',
+        corner1: { x: 0, y: 0 },
+        corner2: { x: 20, y: 10 },
+        callout: { tip: { x: 20, y: 5 }, anchor: { x: 80, y: 40 } }
+      })
+    ).toEqual({ minX: 0, minY: 0, maxX: 80, maxY: 40 })
+  })
+
+  it('includes both callout leader tip and text-box anchor', () => {
+    expect(
+      acExMarkupBounds({
+        type: 'callout',
+        tip: { x: 0, y: 0 },
+        anchor: { x: 100, y: -30 }
+      })
+    ).toEqual({ minX: 0, minY: -30, maxX: 100, maxY: 0 })
+  })
+})
+
+describe('acExMarkupFocusExtents', () => {
+  it('unions geometry with overlay client rectangles', () => {
+    expect(
+      acExMarkupFocusExtents(
+        {
+          type: 'callout',
+          tip: { x: 0, y: 0 },
+          anchor: { x: 10, y: 0 }
+        },
+        [{ left: 100, top: 20, right: 180, bottom: 60 }],
+        (clientX, clientY) => ({ x: clientX / 10, y: -clientY / 10 })
+      )
+    ).toEqual({ minX: 0, minY: -6, maxX: 18, maxY: 0 })
+  })
+})
+
+describe('acExOverlayArrowSize', () => {
+  it('scales arrow heads with stroke width', () => {
+    expect(acExOverlayArrowSize(2, 2)).toBe(12)
+    expect(acExOverlayArrowSize(4, 2)).toBe(24)
+  })
+
+  it('keeps a 12px arrow for hairline strokes', () => {
+    expect(acExOverlayArrowSize(1, 0)).toBe(12)
   })
 })

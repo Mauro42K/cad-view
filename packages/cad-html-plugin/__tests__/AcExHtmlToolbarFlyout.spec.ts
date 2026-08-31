@@ -25,6 +25,7 @@ describe('setupAcExHtmlToolbarFlyouts', () => {
       <button type="button" id="mlcad-snap-menu-btn"></button>
       <button type="button" id="mlcad-zoom-menu-btn"></button>
       <button type="button" id="mlcad-lang-btn"></button>
+      <button type="button" id="mlcad-settings-btn"></button>
       ${stripHtml('mlcad-measure-strip', '<button type="button" data-action="measure" data-measure-mode="distance"></button>')}
       ${stripHtml('mlcad-markup-strip', '<button type="button" data-action="markup" data-markup-mode="cloud"></button>')}
       ${stripHtml('mlcad-snap-strip', '<button type="button" id="mlcad-ortho-btn"></button>')}
@@ -33,13 +34,17 @@ describe('setupAcExHtmlToolbarFlyouts', () => {
         '<button type="button" data-action="fit"></button><button type="button" data-action="zoom-original"></button>'
       )}
       ${stripHtml(
+        'mlcad-settings-strip',
+        '<button type="button" data-action="toggle-theme"></button><button type="button" id="mlcad-settings-locale-btn" data-action="locale-menu"></button><button type="button" data-action="switch-bg"></button>'
+      )}
+      ${stripHtml(
         'mlcad-locale-strip',
         '<button type="button" data-locale="en"></button><button type="button" data-locale="zh"></button>'
       )}
     `)
   }
 
-  it('toggles a sticky strip and keeps it open on canvas click', () => {
+  it('closes a dismissible measure strip on canvas click and tool select', () => {
     mountAllStrips()
     const onItemClick = jest.fn()
     const flyouts = setupAcExHtmlToolbarFlyouts({ onItemClick })
@@ -51,20 +56,35 @@ describe('setupAcExHtmlToolbarFlyouts', () => {
     expect(parent?.classList.contains('is-menu-open')).toBe(true)
 
     document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
-    expect(wrap?.hidden).toBe(false)
+    expect(wrap?.hidden).toBe(true)
 
+    parent?.click()
     document
       .querySelector<HTMLButtonElement>('[data-measure-mode="distance"]')
       ?.click()
     expect(onItemClick).toHaveBeenCalled()
-    expect(wrap?.hidden).toBe(false)
-
-    parent?.click()
     expect(wrap?.hidden).toBe(true)
+
     flyouts.close()
   })
 
-  it('closes a sticky strip when another strip parent is clicked', () => {
+  it('closes a dismissible review strip after a markup tool is selected', () => {
+    mountAllStrips()
+    const onItemClick = jest.fn()
+    setupAcExHtmlToolbarFlyouts({ onItemClick })
+    const wrap = document.getElementById('mlcad-markup-strip-wrap')
+
+    document.getElementById('mlcad-markup-menu-btn')?.click()
+    expect(wrap?.hidden).toBe(false)
+
+    document
+      .querySelector<HTMLButtonElement>('[data-markup-mode="cloud"]')
+      ?.click()
+    expect(onItemClick).toHaveBeenCalled()
+    expect(wrap?.hidden).toBe(true)
+  })
+
+  it('closes a strip when another strip parent is clicked', () => {
     mountAllStrips()
     setupAcExHtmlToolbarFlyouts({ onItemClick: jest.fn() })
 
@@ -78,6 +98,24 @@ describe('setupAcExHtmlToolbarFlyouts', () => {
       true
     )
     expect(document.getElementById('mlcad-snap-strip-wrap')?.hidden).toBe(false)
+  })
+
+  it('notifies onOpen when a strip replaces another', () => {
+    mountAllStrips()
+    const onOpen = jest.fn()
+    setupAcExHtmlToolbarFlyouts({ onItemClick: jest.fn(), onOpen })
+
+    document.getElementById('mlcad-measure-menu-btn')?.click()
+    expect(onOpen).toHaveBeenCalledWith(
+      'measure',
+      document.getElementById('mlcad-measure-strip')
+    )
+
+    document.getElementById('mlcad-zoom-menu-btn')?.click()
+    expect(onOpen).toHaveBeenLastCalledWith(
+      'zoom',
+      document.getElementById('mlcad-zoom-strip')
+    )
   })
 
   it('closes a dismissible language strip on canvas click and locale select', () => {
@@ -107,6 +145,41 @@ describe('setupAcExHtmlToolbarFlyouts', () => {
     expect(wrap?.hidden).toBe(true)
   })
 
+  it('opens locale from settings and hides the settings strip', () => {
+    mountAllStrips()
+    const onLocaleSelect = jest.fn()
+    const onStripChange = jest.fn()
+    setupAcExHtmlToolbarFlyouts({
+      onItemClick: jest.fn(),
+      onLocaleSelect,
+      getLocale: () => 'zh',
+      onStripChange
+    })
+
+    document.getElementById('mlcad-settings-btn')?.click()
+    expect(document.getElementById('mlcad-settings-strip-wrap')?.hidden).toBe(
+      false
+    )
+
+    document.getElementById('mlcad-settings-locale-btn')?.click()
+    expect(document.getElementById('mlcad-settings-strip-wrap')?.hidden).toBe(
+      true
+    )
+    expect(document.getElementById('mlcad-locale-strip-wrap')?.hidden).toBe(
+      false
+    )
+
+    document.querySelector<HTMLButtonElement>('[data-locale="en"]')?.click()
+    expect(onLocaleSelect).toHaveBeenCalledWith('en')
+    expect(document.getElementById('mlcad-locale-strip-wrap')?.hidden).toBe(
+      true
+    )
+    expect(document.getElementById('mlcad-settings-strip-wrap')?.hidden).toBe(
+      false
+    )
+    expect(onStripChange).toHaveBeenCalled()
+  })
+
   it('closes a dismissible zoom strip on canvas click and tool select', () => {
     mountAllStrips()
     const onItemClick = jest.fn()
@@ -125,16 +198,36 @@ describe('setupAcExHtmlToolbarFlyouts', () => {
     expect(wrap?.hidden).toBe(true)
   })
 
-  it('copies a child icon onto the parent button', () => {
+  it('closes a dismissible settings strip after a leaf tool is selected', () => {
+    mountAllStrips()
+    const onItemClick = jest.fn()
+    setupAcExHtmlToolbarFlyouts({ onItemClick })
+    const wrap = document.getElementById('mlcad-settings-strip-wrap')
+
+    document.getElementById('mlcad-settings-btn')?.click()
+    expect(wrap?.hidden).toBe(false)
+
+    document
+      .querySelector<HTMLButtonElement>('[data-action="toggle-theme"]')
+      ?.click()
+    expect(onItemClick).toHaveBeenCalled()
+    expect(wrap?.hidden).toBe(true)
+  })
+
+  it('copies a child icon onto the parent button icon slot', () => {
     mountFixture(
-      '<button id="mlcad-zoom-menu-btn">parent</button><button id="child"><span>icon</span></button>'
+      '<button id="mlcad-zoom-menu-btn"><span class="mlcad-tool-btn-icon">parent</span><span class="mlcad-tool-btn-label">Zoom</span></button><button id="child"><span class="mlcad-tool-btn-icon"><span>icon</span></span><span class="mlcad-tool-btn-label">Fit</span></button>'
     )
     setAcExHtmlParentChildIcon(
       'mlcad-zoom-menu-btn',
       document.getElementById('child') as HTMLElement
     )
-    expect(document.getElementById('mlcad-zoom-menu-btn')?.innerHTML).toBe(
+    const parent = document.getElementById('mlcad-zoom-menu-btn')
+    expect(parent?.querySelector('.mlcad-tool-btn-icon')?.innerHTML).toBe(
       '<span>icon</span>'
+    )
+    expect(parent?.querySelector('.mlcad-tool-btn-label')?.textContent).toBe(
+      'Zoom'
     )
   })
 })

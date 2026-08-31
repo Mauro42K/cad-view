@@ -674,6 +674,10 @@ export default {
     firstPoint: 'İlk noktayı belirtin',
     secondPoint: 'İkinci noktayı belirtin'
   },
+  measureContinuous: {
+    firstPoint: 'İlk noktayı belirtin',
+    nextPoint: 'Sonraki noktayı belirtin (bitirmek için Enter\'a basın)'
+  },
   measurePoint: {
     point: 'Noktayı belirtin'
   },
@@ -1193,6 +1197,11 @@ export default {
         display: 'Önceki(Ö)',
         local: 'Önceki',
         global: 'Previous'
+      },
+      original: {
+        display: 'Orijinal(O)',
+        local: 'Orijinal',
+        global: 'Original'
       },
       scale: {
         display: 'Ölçek(Ö)',

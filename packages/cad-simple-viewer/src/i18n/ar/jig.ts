@@ -893,6 +893,11 @@ export default {
         local: 'السابق',
         global: 'Previous'
       },
+      original: {
+        display: 'الأصلي(O)',
+        local: 'الأصلي',
+        global: 'Original'
+      },
       scale: {
         display: 'مقياس(S)',
         local: 'مقياس',
@@ -1537,6 +1542,16 @@ export default {
 
     secondPoint:
       'حدد النقطة الثانية'
+  },
+
+  measureContinuous: {
+    ...enJig.measureContinuous,
+
+    firstPoint:
+      'حدد النقطة الأولى',
+
+    nextPoint:
+      'حدد النقطة التالية (أو اضغط Enter للإنهاء)'
   },
 
   measurePoint: {

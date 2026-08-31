@@ -14,6 +14,16 @@ export default {
     invalidInput: '输入无效。',
     close: '关闭命令行'
   },
+  mobileCommand: {
+    length: '长度',
+    angle: '角度',
+    dx: 'ΔX',
+    dy: 'ΔY',
+    x: 'X',
+    y: 'Y',
+    confirm: '确定',
+    cancel: '取消'
+  },
   inputManager: {
     firstCorner: '指定第一个角点或',
     secondCorner: '指定第二个角点或'
@@ -56,7 +66,6 @@ export default {
   },
   drawStyle: {
     color: '颜色',
-    lineWeight: '线宽',
     fontSize: '字号'
   }
 }

@@ -394,6 +394,10 @@ export default {
       text: '距离',
       description: '测量两点之间的距离'
     },
+    measureContinuous: {
+      text: '连续测',
+      description: '连续拾取多个点测量各段距离，直到按 Enter 或取消'
+    },
     measureAngle: {
       text: '角度',
       description: '测量共享一个顶点的两条线之间的角度'
@@ -409,6 +413,10 @@ export default {
     measurePoint: {
       text: '坐标',
       description: '测量拾取点的 X/Y 坐标'
+    },
+    measurementPanel: {
+      text: '测量面板',
+      description: '打开测量面板'
     },
     clearMeasurements: {
       text: '清除',
@@ -482,10 +490,6 @@ export default {
       text: '颜色',
       description: '设置新建批注的颜色'
     },
-    markupLineWeight: {
-      text: '线宽',
-      description: '设置新建批注的线宽'
-    },
     markupFontSize: {
       text: '字号',
       description: '设置文字与标注文本框的字号'
@@ -493,10 +497,6 @@ export default {
     measurementColor: {
       text: '颜色',
       description: '有选中测量标注时修改其颜色；未选中时用于后续添加的测量标注'
-    },
-    measurementLineWeight: {
-      text: '线宽',
-      description: '有选中测量标注时修改其线宽；未选中时用于后续添加的测量标注'
     },
     measurementFontSize: {
       text: '字号',
@@ -529,6 +529,10 @@ export default {
     switchBg: {
       text: '切换背景色',
       description: '在白色与黑色之间切换绘图背景色'
+    },
+    readingMode: {
+      text: '阅读模式',
+      description: '切换阅读模式：白底黑线，便于阅读复杂图纸'
     },
     zoomToExtent: {
       text: '范围缩放',
@@ -707,6 +711,23 @@ export default {
         question: '疑问',
         answered: '已答复',
         closed: '已关闭'
+      }
+    },
+    measurements: {
+      tab: '测量',
+      title: '测量',
+      empty: '暂无测量',
+      type: '类型',
+      value: '数值',
+      filterAll: '全部',
+      delete: '删除',
+      clear: '全部清除',
+      typeValues: {
+        distance: '距离',
+        angle: '角度',
+        area: '面积',
+        arc: '弧长',
+        point: '坐标'
       }
     },
     missingResources: {
