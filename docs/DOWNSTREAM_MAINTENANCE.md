@@ -14,3 +14,20 @@ CAD View es una copia downstream del repositorio `mlightcad/cad-viewer`.
 - La revisión humana y el flujo normal de PR siguen siendo la última barrera antes de cualquier merge.
 
 La delta local vigente debe permanecer pequeña, explícita y fácil de reconciliar en el siguiente PR upstream.
+
+## Allowlist de infraestructura downstream
+
+La comparación de paridad contra `upstream/main` debe mostrar únicamente estos
+seis archivos locales:
+
+- `.github/workflows/ci.yml`: controles CI downstream con permisos mínimos, pins
+  inmutables y verificaciones de ancestry.
+- `.github/workflows/upstream-sync.yml`: validación y creación de candidatos de
+  sincronización.
+- `AGENTS.md`: control plane y límites operativos de este mirror.
+- `docs/DEPENDENCY_POLICY.md`: política downstream de dependencias.
+- `docs/DOWNSTREAM_MAINTENANCE.md`: procedimiento y allowlist de mantenimiento.
+- `vercel.json`: configuración downstream de build y salida de Vercel.
+
+Cualquier otro archivo divergente frente al upstream requiere una decisión y
+documentación explícitas antes de aceptarse.
