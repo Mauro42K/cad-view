@@ -512,6 +512,12 @@ export default {
         'إظهار أو إخفاء القياسات في المخطط الحالي'
     },
 
+    measurementpanel: {
+      ...enCommand.ACAD.measurementpanel,
+      description:
+        'فتح لوحة القياس'
+    },
+
     measurementexport: {
       ...enCommand.ACAD.measurementexport,
       description:
@@ -546,6 +552,12 @@ export default {
       ...enCommand.ACAD.measuredistance,
       description:
         'قياس المسافة وفروق الإحداثيات بين نقطتين'
+    },
+
+    measurecontinuous: {
+      ...enCommand.ACAD.measurecontinuous,
+      description:
+        'قياس مسافات متسلسلة باختيار نقاط متتالية حتى Enter أو إلغاء'
     },
 
     measurepoint: {

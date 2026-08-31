@@ -675,6 +675,10 @@ export default {
     firstPoint: 'Specify first point',
     secondPoint: 'Specify second point'
   },
+  measureContinuous: {
+    firstPoint: 'Specify first point',
+    nextPoint: 'Specify next point (or press Enter to finish)'
+  },
   measurePoint: {
     point: 'Specify point'
   },
@@ -1193,6 +1197,11 @@ export default {
         display: 'Previous(P)',
         local: 'Previous',
         global: 'Previous'
+      },
+      original: {
+        display: 'Original(O)',
+        local: 'Original',
+        global: 'Original'
       },
       scale: {
         display: 'Scale(S)',

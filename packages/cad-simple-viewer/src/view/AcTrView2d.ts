@@ -38,7 +38,9 @@ import Stats from 'three/examples/jsm/libs/stats.module'
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
 
 import { AcApDocManager, AcApSettingManager } from '../app'
+import { AcApZoomCmd } from '../command/AcApZoomCmd'
 import { isMarkupHtmlTextEditing } from '../command/markup/AcApMarkupTextEdit'
+import { notifyMeasurementLayoutChanged } from '../command/measure/AcApMeasurementStore'
 import {
   AcEdBaseView,
   AcEdCalculateSizeCallback,
@@ -47,6 +49,7 @@ import {
   AcEdGripManager,
   AcEdMTextEditor,
   AcEdOpenMode,
+  AcEdSnapLoupeViewState,
   AcEdSpatialQueryResultItem,
   AcEdSpatialQueryResultItemEx,
   AcEdViewMode,
@@ -63,6 +66,10 @@ import type { AcTrSpatialSearchOptions } from '../spatialIndex/AcTrSpatialIndex'
 import { AcTrGeometryUtil } from '../util'
 import { acapRunDatabaseEdit } from '../util/AcApDatabaseEdit'
 import type { AcApCompareDisplayOptions } from './AcApCompareDisplay'
+import {
+  ACAP_READING_MODE_BACKGROUND,
+  AcApReadingModeState
+} from './AcApReadingMode'
 import {
   trySelectReviewOverlay,
   trySelectReviewOverlaysByBox
@@ -256,6 +263,15 @@ export class AcTrView2d extends AcEdBaseView {
   private _gripManager: AcEdGripManager
   /** Global keyboard shortcuts for the view (undo/redo, erase, etc.). */
   private _keyHandler: AcEdViewKeyHandler
+  /** Transient reading mode forces black linework on a white canvas. */
+  private readonly _readingMode = new AcApReadingModeState({
+    getCurrentBackgroundColor: () => this._renderer.currentBackgroundColor,
+    applyViewClearColor: value => this.applyViewClearColor(value),
+    setCompareDisplay: options => this.setCompareDisplay(options),
+    markDirty: () => {
+      this._isDirty = true
+    }
+  })
 
   /**
    * Wall-time between cooperative yields during progressive open (ms).
@@ -589,6 +605,12 @@ export class AcTrView2d extends AcEdBaseView {
     // This method is called after camera and render are created.
     // Children class can override this method to add its own logic
     this.setCursor(AcEdCorsorType.Crosshair)
+    this.editor.events.commandWillStart.addEventListener(() => {
+      this.htmlTransientManager.setHitTestEnabled(false)
+    })
+    this.editor.events.commandEnded.addEventListener(() => {
+      this.htmlTransientManager.setHitTestEnabled(true)
+    })
   }
 
   /**
@@ -609,6 +631,36 @@ export class AcTrView2d extends AcEdBaseView {
    */
   set mode(value: AcEdViewMode) {
     this.activeLayoutView.mode = value
+  }
+
+  /**
+   * Enables or disables OrbitControls on the active layout view.
+   *
+   * @param enabled - When false, pan and zoom are disabled (e.g. while the
+   *   snap loupe is tracking a long-press).
+   */
+  override setNavigationEnabled(enabled: boolean) {
+    const layoutView = this.activeLayoutView
+    if (layoutView) layoutView.enabled = enabled
+  }
+
+  /**
+   * Shows or hides the screen-fixed snap loupe overlay viewport.
+   *
+   * @param state - Loupe screen rectangle and world box, or `null` to hide.
+   */
+  override setSnapLoupe(state: AcEdSnapLoupeViewState | null) {
+    const overlay = this.activeLayoutView?.overlayViewport
+    if (!overlay) return
+    if (!state) {
+      overlay.visible = false
+      this._isDirty = true
+      return
+    }
+    overlay.setScreenRect(state.x, state.y, state.size, state.size)
+    overlay.setViewBox(state.viewBox)
+    overlay.visible = true
+    this._isDirty = true
   }
 
   /**
@@ -829,13 +881,27 @@ export class AcTrView2d extends AcEdBaseView {
    * manager. Does not touch `COLORTHEME` / UI chrome.
    */
   private applyCanvasBackground(value: number) {
-    this._renderer.setClearColor(value)
-    // Updates style-manager background, repaints ACI-7 / bg-follow materials.
     this._renderer.currentBackgroundColor = value
     this._layerAppearance.refreshTextMaterialsInObjectTree(
       this._scene.internalScene
     )
     this.resyncForegroundLayersForBackground()
+    if (this._readingMode.isEnabled) {
+      this._readingMode.noteLayoutBackground(value)
+      this.applyViewClearColor(ACAP_READING_MODE_BACKGROUND)
+      return
+    }
+    this.applyViewClearColor(value)
+  }
+
+  /**
+   * Updates only the WebGL clear colour and cursor chrome.
+   *
+   * Reading mode uses this so the white canvas is visual-only and does not
+   * repaint cached entity materials via the style manager.
+   */
+  private applyViewClearColor(value: number) {
+    this._renderer.setClearColor(value)
     this.editor.syncCursorBackground(value)
     this._isDirty = true
   }
@@ -892,6 +958,28 @@ export class AcTrView2d extends AcEdBaseView {
     this.applyCanvasBackground(
       readLayoutBackgroundColor(database, this.isModelSpaceLayout(database))
     )
+    this._readingMode.reapplyIfEnabled()
+  }
+
+  /** Whether transient reading mode is active on this view. */
+  get readingModeEnabled() {
+    return this._readingMode.isEnabled
+  }
+
+  /** Toggles transient reading mode on or off. */
+  toggleReadingMode() {
+    this._readingMode.toggle()
+  }
+
+  /**
+   * Enables or disables transient reading mode (black linework, white canvas).
+   *
+   * @param enabled - When true, snapshots the current canvas background and
+   *   forces monochrome display; when false, restores the snapshot and
+   *   original entity colors.
+   */
+  setReadingMode(enabled: boolean) {
+    this._readingMode.setEnabled(enabled)
   }
 
   /**
@@ -1010,10 +1098,14 @@ export class AcTrView2d extends AcEdBaseView {
     return this._scene.activeLayoutBtrId
   }
   set activeLayoutBtrId(value: string) {
+    const previous = this._scene.activeLayoutBtrId
     this._layoutViewManager.activeLayoutBtrId = value
     this._scene.activeLayoutBtrId = value
     this.htmlTransientManager.setActiveLayoutId(value)
     this._isDirty = true
+    if (previous !== value) {
+      notifyMeasurementLayoutChanged()
+    }
   }
 
   /**
@@ -1193,6 +1285,10 @@ export class AcTrView2d extends AcEdBaseView {
         }
         this._progressiveOpenFit.applyFinalFit(() => this.resolveLayoutFitBox())
         this.endProgressiveOpenFit()
+        const originalBtrId = layoutBtrId ?? this.activeLayoutBtrId
+        if (originalBtrId) {
+          AcApZoomCmd.rememberOriginalView(this, originalBtrId)
+        }
       },
       300, // check every 300 ms
       timeout
@@ -1936,6 +2032,7 @@ export class AcTrView2d extends AcEdBaseView {
           }
         }
         this._isDirty = true
+        AcApZoomCmd.rememberOriginalView(this, btrId)
       },
       300,
       0

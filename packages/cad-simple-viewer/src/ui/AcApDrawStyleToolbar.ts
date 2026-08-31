@@ -1,7 +1,6 @@
 import {
   AcCmColor,
-  acdbHostApplicationServices,
-  AcGiLineWeight
+  acdbHostApplicationServices
 } from '@mlightcad/data-model'
 
 import {
@@ -14,11 +13,9 @@ import {
   cssToMarkupColor,
   defaultMarkupColor,
   getMarkupFontSize,
-  getMarkupLineWeight,
   markupColorToCss,
   setMarkupDrawColor,
-  setMarkupDrawFontSize,
-  setMarkupDrawLineWeight
+  setMarkupDrawFontSize
 } from '../command/markup/AcApMarkupUtil'
 import {
   applyMeasurementStyleToSelection,
@@ -27,6 +24,7 @@ import {
   subscribeMeasurementSelection
 } from '../command/measure/AcApMeasurementStore'
 import type { AcEdCommandEventArgs } from '../editor'
+import type { AcEdSessionAccessory } from '../editor/command/AcEdSessionAccessory'
 import { acedApplyUiTheme, resolveUiTheme } from '../editor/global/AcEdUiTheme'
 import { AcApI18n } from '../i18n'
 import {
@@ -34,18 +32,18 @@ import {
   acapCssToMeasurementColor,
   acapGetMeasurementColor,
   acapGetMeasurementFontSize,
-  acapGetMeasurementLineWeight,
   acapSetMeasurementDrawColor,
-  acapSetMeasurementDrawFontSize,
-  acapSetMeasurementDrawLineWeight
+  acapSetMeasurementDrawFontSize
 } from '../util/AcApMeasurementUtil'
 import type { AcTrView2d } from '../view'
 import {
   type AcApDrawStyleKind,
   acapDrawStyleKindForCommand,
+  acapRegisterDrawStyleSessionHost,
   acapResolveDrawStyleKind,
   acapSetDrawStyleToolbarVisible,
-  acapShouldShowDrawStyleToolbar
+  acapShouldShowDrawStyleToolbar,
+  acapUnregisterDrawStyleSessionHost
 } from './AcApDrawStyle'
 
 /** Font-size choices shown in the overlay dropdown, in CSS pixels. */
@@ -77,6 +75,11 @@ const TOOLBAR_CSS = `
     .ml-draw-style-toolbar.is-visible {
       display: inline-flex;
     }
+    .ml-draw-style-toolbar__controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
     .ml-draw-style-toolbar__swatch {
       position: relative;
       width: 28px;
@@ -106,107 +109,6 @@ const TOOLBAR_CSS = `
       font-size: 12px;
       padding: 0 6px;
     }
-    .ml-draw-style-toolbar__lineweight {
-      position: relative;
-      width: 120px;
-      flex: 0 0 120px;
-    }
-    .ml-draw-style-toolbar__lineweight-trigger {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      width: 100%;
-      height: 28px;
-      box-sizing: border-box;
-      padding: 0 6px;
-      border: 1px solid var(--ml-ui-border, #dcdfe6);
-      border-radius: 4px;
-      background: var(--ml-ui-bg, #fff);
-      color: inherit;
-      font-family: inherit;
-      font-size: 12px;
-      line-height: 1;
-      text-align: left;
-      cursor: pointer;
-    }
-    .ml-draw-style-toolbar__lineweight-label {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      text-align: left;
-    }
-    .ml-draw-style-toolbar__lineweight-caret {
-      flex: 0 0 auto;
-      margin-left: auto;
-      width: 0;
-      height: 0;
-      border-left: 3.5px solid transparent;
-      border-right: 3.5px solid transparent;
-      border-top: 4px solid currentColor;
-      opacity: 0.55;
-    }
-    .ml-draw-style-toolbar__lineweight-preview {
-      position: relative;
-      display: inline-flex;
-      width: 36px;
-      height: 14px;
-      flex: 0 0 36px;
-    }
-    .ml-draw-style-toolbar__lineweight-preview::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      right: 0;
-      top: 50%;
-      height: var(--ml-lineweight-height, 2px);
-      transform: translateY(-50%);
-      background-color: currentColor;
-      border-radius: 999px;
-    }
-    .ml-draw-style-toolbar__lineweight-menu {
-      display: none;
-      position: absolute;
-      top: calc(100% + 4px);
-      left: 0;
-      z-index: 2;
-      min-width: 148px;
-      max-height: 260px;
-      overflow-y: auto;
-      padding: 4px 0;
-      border: 1px solid var(--ml-ui-border, #dcdfe6);
-      border-radius: 6px;
-      background: var(--ml-ui-bg, rgba(255, 255, 255, 0.98));
-      box-shadow: var(--ml-ui-shadow, 0 4px 12px rgba(0, 0, 0, 0.16));
-    }
-    .ml-draw-style-toolbar__lineweight-menu.is-open {
-      display: block;
-    }
-    .ml-draw-style-toolbar__lineweight-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      width: 100%;
-      box-sizing: border-box;
-      padding: 4px 10px;
-      border: 0;
-      background: transparent;
-      color: inherit;
-      font-family: inherit;
-      font-size: 12px;
-      cursor: pointer;
-    }
-    .ml-draw-style-toolbar__lineweight-item:hover,
-    .ml-draw-style-toolbar__lineweight-item.is-selected {
-      background: var(--ml-ui-hover, rgba(64, 158, 255, 0.12));
-    }
-    .ml-draw-style-toolbar__lineweight-text {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      text-align: left;
-    }
     .ml-draw-style-toolbar__color {
       position: relative;
     }
@@ -225,6 +127,10 @@ const TOOLBAR_CSS = `
     }
     .ml-draw-style-toolbar__color-panel.is-open {
       display: block;
+    }
+    .ml-draw-style-toolbar__color-panel--drop-up {
+      top: auto;
+      bottom: calc(100% + 6px);
     }
     .ml-draw-style-toolbar__aci-large {
       display: grid;
@@ -304,186 +210,6 @@ const LARGE_ACI = Array.from({ length: 240 }, (_, i) => i + 10)
 const GRAY_ACI = Array.from({ length: 6 }, (_, i) => i + 250)
 
 /**
- * Unique numeric line weights from {@link AcGiLineWeight}, sorted ascending.
- *
- * @returns Positive values in hundredths of a millimeter (for example 25 = 0.25 mm).
- */
-function numericLineWeights(): AcGiLineWeight[] {
-  return Array.from(
-    new Set(
-      Object.values(AcGiLineWeight).filter(
-        (value): value is AcGiLineWeight =>
-          typeof value === 'number' && value > 0
-      )
-    )
-  ).sort((a, b) => a - b)
-}
-
-/**
- * Formats a line weight for the dropdown label.
- *
- * @param value - Line weight in hundredths of a millimeter.
- * @returns Label such as `"0.25 mm"`.
- */
-function formatLineWeight(value: AcGiLineWeight): string {
-  return `${(value / 100).toFixed(2)} mm`
-}
-
-/**
- * Converts a numeric line weight into a clamped preview stroke thickness.
- *
- * @param value - Line weight in hundredths of a millimeter.
- * @returns Stroke height in CSS pixels.
- */
-function previewLineHeightPx(value: number): number {
-  return Math.max(1, Math.min(6, value / 40))
-}
-
-/** Custom line-weight dropdown used by {@link AcApDrawStyleToolbar}. */
-interface AcApLineWeightPicker {
-  /** Root control appended to the overlay. */
-  root: HTMLDivElement
-  /** Updates the trigger and selected menu item. */
-  setValue: (weight: number) => void
-  /** Sets the localized tooltip on the trigger. */
-  setTitle: (title: string) => void
-  /** Closes the popover menu. */
-  close: () => void
-  /** Whether the popover menu is open. */
-  isOpen: () => boolean
-  /** True when `node` is inside this control. */
-  contains: (node: Node | null) => boolean
-}
-
-/**
- * Builds a compact line-weight dropdown with a stroke preview in each row.
- *
- * @param onChange - Called when the user picks a weight.
- * @param onOpen - Called just before the menu opens (used to close other popovers).
- * @returns Picker controller.
- */
-function createLineWeightPicker(
-  onChange: (weight: AcGiLineWeight) => void,
-  onOpen: () => void
-): AcApLineWeightPicker {
-  const prefix = 'ml-draw-style-toolbar'
-  const weights = numericLineWeights()
-  let open = false
-
-  const root = document.createElement('div')
-  root.className = `${prefix}__lineweight`
-
-  const trigger = document.createElement('button')
-  trigger.type = 'button'
-  trigger.className = `${prefix}__lineweight-trigger`
-  trigger.setAttribute('aria-haspopup', 'listbox')
-  trigger.setAttribute('aria-expanded', 'false')
-
-  const preview = document.createElement('span')
-  preview.className = `${prefix}__lineweight-preview`
-
-  const label = document.createElement('span')
-  label.className = `${prefix}__lineweight-label`
-
-  const caret = document.createElement('span')
-  caret.className = `${prefix}__lineweight-caret`
-  caret.setAttribute('aria-hidden', 'true')
-
-  trigger.append(preview, label, caret)
-
-  const menu = document.createElement('div')
-  menu.className = `${prefix}__lineweight-menu`
-  menu.setAttribute('role', 'listbox')
-
-  const paintTrigger = (weight: number) => {
-    preview.style.setProperty(
-      '--ml-lineweight-height',
-      `${previewLineHeightPx(weight)}px`
-    )
-    label.textContent = formatLineWeight(weight)
-  }
-
-  const markSelected = (weight: number) => {
-    menu.querySelectorAll(`.${prefix}__lineweight-item`).forEach(node => {
-      const item = node as HTMLElement
-      item.classList.toggle('is-selected', item.dataset.value === String(weight))
-    })
-  }
-
-  const close = () => {
-    open = false
-    menu.classList.remove('is-open')
-    trigger.setAttribute('aria-expanded', 'false')
-  }
-
-  const openMenu = () => {
-    onOpen()
-    open = true
-    menu.classList.add('is-open')
-    trigger.setAttribute('aria-expanded', 'true')
-  }
-
-  const addItem = (weight: number) => {
-    const item = document.createElement('button')
-    item.type = 'button'
-    item.className = `${prefix}__lineweight-item`
-    item.dataset.value = String(weight)
-    item.setAttribute('role', 'option')
-
-    const itemPreview = document.createElement('span')
-    itemPreview.className = `${prefix}__lineweight-preview`
-    itemPreview.style.setProperty(
-      '--ml-lineweight-height',
-      `${previewLineHeightPx(weight)}px`
-    )
-
-    const itemLabel = document.createElement('span')
-    itemLabel.className = `${prefix}__lineweight-text`
-    itemLabel.textContent = formatLineWeight(weight)
-
-    item.append(itemPreview, itemLabel)
-    item.addEventListener('click', event => {
-      event.preventDefault()
-      event.stopPropagation()
-      paintTrigger(weight)
-      markSelected(weight)
-      close()
-      onChange(weight as AcGiLineWeight)
-    })
-    menu.appendChild(item)
-  }
-
-  for (const weight of weights) addItem(weight)
-
-  trigger.addEventListener('click', event => {
-    event.preventDefault()
-    event.stopPropagation()
-    if (open) close()
-    else openMenu()
-  })
-
-  root.append(trigger, menu)
-  paintTrigger(weights[0] ?? 25)
-  markSelected(weights[0] ?? 25)
-
-  return {
-    root,
-    setValue: weight => {
-      if (!(weight > 0)) return
-      if (!menu.querySelector(`[data-value="${weight}"]`)) addItem(weight)
-      paintTrigger(weight)
-      markSelected(weight)
-    },
-    setTitle: title => {
-      trigger.title = title
-    },
-    close,
-    isOpen: () => open,
-    contains: node => !!node && root.contains(node)
-  }
-}
-
-/**
  * Injects overlay CSS into `document.head` once.
  */
 function ensureStyles(): void {
@@ -498,9 +224,9 @@ function ensureStyles(): void {
 }
 
 /**
- * Compact color / lineweight / font-size overlay shown during measurement
- * and markup drawing commands, and while a measurement or markup overlay
- * is selected, when the host ribbon is hidden.
+ * Compact color / font-size overlay shown during measurement and markup
+ * drawing commands, and while a measurement or markup overlay is selected,
+ * when the host ribbon is hidden.
  */
 export class AcApDrawStyleToolbar {
   /** Root toolbar element appended to the view container. */
@@ -518,11 +244,14 @@ export class AcApDrawStyleToolbar {
   /** Popover containing ACI palettes. */
   private readonly colorPanel: HTMLDivElement
 
-  /** Compact line-weight dropdown with stroke previews. */
-  private readonly lineWeightPicker: AcApLineWeightPicker
-
   /** Dropdown of font sizes in CSS pixels. */
   private readonly fontSizeSelect: HTMLSelectElement
+
+  /** Color swatch + font-size row; reparented into the session panel. */
+  private readonly controlsRow: HTMLDivElement
+
+  /** True while controls live in the phone/pad session accessory slot. */
+  private sessionMounted = false
 
   /** Active overlay session, or `undefined` when hidden. */
   private kind: AcApDrawStyleKind | undefined
@@ -593,17 +322,14 @@ export class AcApDrawStyleToolbar {
     )
     this.colorWrap.appendChild(this.swatch)
     this.colorWrap.appendChild(this.colorPanel)
-    this.root.appendChild(this.colorWrap)
-
-    this.lineWeightPicker = createLineWeightPicker(
-      weight => this.applyLineWeight(weight),
-      () => this.hideColorPanel()
-    )
-    this.root.appendChild(this.lineWeightPicker.root)
 
     this.fontSizeSelect = document.createElement('select')
     this.fontSizeSelect.className = 'ml-draw-style-toolbar__select'
-    this.root.appendChild(this.fontSizeSelect)
+
+    this.controlsRow = document.createElement('div')
+    this.controlsRow.className = 'ml-draw-style-toolbar__controls'
+    this.controlsRow.append(this.colorWrap, this.fontSizeSelect)
+    this.root.appendChild(this.controlsRow)
 
     this.swatch.addEventListener('click', event => {
       event.preventDefault()
@@ -623,16 +349,18 @@ export class AcApDrawStyleToolbar {
     })
     this.root.addEventListener('pointerdown', event => event.stopPropagation())
     this.root.addEventListener('mousedown', event => event.stopPropagation())
+    this.controlsRow.addEventListener('pointerdown', event =>
+      event.stopPropagation()
+    )
+    this.controlsRow.addEventListener('mousedown', event =>
+      event.stopPropagation()
+    )
     this.onDocumentPointerDown = event => {
       const target = event.target as Node | null
       const inColor = !!target && this.colorWrap.contains(target)
-      const inLineWeight = this.lineWeightPicker.contains(target)
-      const colorOpen = this.colorPanelOpen
-      const weightOpen = this.lineWeightPicker.isOpen()
-      if (!colorOpen && !weightOpen) return
-      if (colorOpen && !inColor) this.hideColorPanel()
-      if (weightOpen && !inLineWeight) this.lineWeightPicker.close()
-      if (!inColor && !inLineWeight) {
+      if (!this.colorPanelOpen) return
+      if (!inColor) {
+        this.hideColorPanel()
         event.preventDefault()
         event.stopPropagation()
       }
@@ -653,6 +381,7 @@ export class AcApDrawStyleToolbar {
       host.style.position = 'relative'
     }
     host.appendChild(this.root)
+    acapRegisterDrawStyleSessionHost(view, this)
 
     view.editor.events.commandWillStart.addEventListener(
       this.onCommandWillStart
@@ -678,7 +407,6 @@ export class AcApDrawStyleToolbar {
    */
   dispose(): void {
     this.hideColorPanel()
-    this.lineWeightPicker.close()
     document.removeEventListener(
       'pointerdown',
       this.onDocumentPointerDown,
@@ -695,8 +423,50 @@ export class AcApDrawStyleToolbar {
     )
     this.unsubscribeMarkupStore()
     this.unsubscribeMeasurementSelection()
+    this.unmountSession()
+    acapUnregisterDrawStyleSessionHost(this.view)
     this.root.remove()
     acapSetDrawStyleToolbarVisible(false)
+  }
+
+  /**
+   * Color / font-size controls for the phone/pad session panel.
+   *
+   * @returns Accessory that reparents {@link controlsRow} into the slot.
+   */
+  createSessionAccessory(): AcEdSessionAccessory {
+    return {
+      id: 'draw-style',
+      mount: host => this.mountSession(host),
+      unmount: () => this.unmountSession()
+    }
+  }
+
+  /**
+   * Moves the controls into the session panel and hides the canvas overlay.
+   *
+   * @param host - Accessory row in the bottom session panel.
+   */
+  private mountSession(host: HTMLElement): void {
+    this.sessionMounted = true
+    this.colorPanel.classList.add('ml-draw-style-toolbar__color-panel--drop-up')
+    host.appendChild(this.controlsRow)
+    this.refreshVisibility()
+    this.syncFromSession()
+  }
+
+  /**
+   * Restores the controls to the canvas overlay.
+   */
+  private unmountSession(): void {
+    if (!this.sessionMounted) return
+    this.sessionMounted = false
+    this.hideColorPanel()
+    this.colorPanel.classList.remove(
+      'ml-draw-style-toolbar__color-panel--drop-up'
+    )
+    this.root.appendChild(this.controlsRow)
+    this.refreshVisibility()
   }
 
   /**
@@ -713,26 +483,28 @@ export class AcApDrawStyleToolbar {
 
   /**
    * Shows or hides the overlay based on {@link acapShouldShowDrawStyleToolbar}.
+   * Hidden while the same controls are mounted in the session panel.
    */
   private refreshVisibility(): void {
-    const visible = acapShouldShowDrawStyleToolbar(this.kind)
+    const visible =
+      acapShouldShowDrawStyleToolbar(this.kind) && !this.sessionMounted
     this.root.classList.toggle('is-visible', visible)
-    acapSetDrawStyleToolbarVisible(visible)
-    if (visible) {
+    acapSetDrawStyleToolbarVisible(
+      visible || (this.sessionMounted && this.kind != null)
+    )
+    if (visible || this.sessionMounted) {
       this.relabel()
       this.syncFromSession()
     } else {
       this.hideColorPanel()
-      this.lineWeightPicker.close()
     }
   }
 
   /**
-   * Applies localized titles to the color, line-weight, and font-size controls.
+   * Applies localized titles to the color and font-size controls.
    */
   private relabel(): void {
     this.swatch.title = AcApI18n.t('main.drawStyle.color')
-    this.lineWeightPicker.setTitle(AcApI18n.t('main.drawStyle.lineWeight'))
     this.fontSizeSelect.title = AcApI18n.t('main.drawStyle.fontSize')
   }
 
@@ -746,9 +518,8 @@ export class AcApDrawStyleToolbar {
       const color =
         selected?.color ??
         (db ? acapGetMeasurementColor(db) : acapCssToMeasurementColor('#7b8794'))
-      const lineWeight = selected?.lineWeight ?? acapGetMeasurementLineWeight()
       const fontSize = selected?.fontSize ?? acapGetMeasurementFontSize()
-      this.paint(color, lineWeight, fontSize)
+      this.paint(color, fontSize)
       return
     }
 
@@ -758,30 +529,20 @@ export class AcApDrawStyleToolbar {
     const color = selected
       ? cssToMarkupColor(selected.style.color)
       : defaultMarkupColor()
-    const lineWeight =
-      (selected?.style.lineWeight as AcGiLineWeight | undefined) ??
-      getMarkupLineWeight()
     const fontSize = selected?.style.fontSize ?? getMarkupFontSize()
-    this.paint(color, lineWeight, fontSize)
+    this.paint(color, fontSize)
   }
 
   /**
-   * Updates swatch, line-weight, and font-size controls to match a style.
+   * Updates swatch and font-size controls to match a style.
    *
    * @param color - Current draw color.
-   * @param lineWeight - Current line weight.
    * @param fontSize - Current font size in CSS pixels.
    */
-  private paint(
-    color: AcCmColor,
-    lineWeight: AcGiLineWeight,
-    fontSize: number
-  ): void {
+  private paint(color: AcCmColor, fontSize: number): void {
     const css = acapCssColor(color)
     this.swatchFill.style.background = css
     this.markSelectedAci(aciIndexOf(color))
-
-    this.lineWeightPicker.setValue(lineWeight)
 
     const sizes = new Set(FONT_SIZE_OPTIONS)
     if (Number.isFinite(fontSize) && fontSize > 0)
@@ -865,7 +626,6 @@ export class AcApDrawStyleToolbar {
    * Opens the ACI color popover.
    */
   private showColorPanel(): void {
-    this.lineWeightPicker.close()
     this.clearColorLeaveTimer()
     this.colorPanelOpen = true
     this.colorPanel.classList.add('is-open')
@@ -895,21 +655,6 @@ export class AcApDrawStyleToolbar {
     if (this.colorLeaveTimer == null) return
     window.clearTimeout(this.colorLeaveTimer)
     this.colorLeaveTimer = undefined
-  }
-
-  /**
-   * Applies a line weight to the current session and any selected entities.
-   *
-   * @param weight - Line weight in hundredths of a millimeter.
-   */
-  private applyLineWeight(weight: AcGiLineWeight): void {
-    if (this.kind === 'measure') {
-      acapSetMeasurementDrawLineWeight(weight)
-      applyMeasurementStyleToSelection(this.view, { lineWeight: weight })
-      return
-    }
-    setMarkupDrawLineWeight(weight)
-    applyMarkupStyleToSelection(this.view, { lineWeight: weight })
   }
 
   /**

@@ -1,7 +1,6 @@
 import {
   AcCmColor,
-  AcCmColorMethod,
-  AcGiLineWeight
+  AcCmColorMethod
 } from '@mlightcad/data-model'
 
 import {
@@ -13,40 +12,40 @@ import type { AcApMarkupGeometry } from '../src/command/markup/AcApMarkupTypes'
 import {
   createDefaultMarkupColor,
   MARKUP_FONT_SIZE,
-  MARKUP_LINE_WEIGHT,
   setMarkupDrawColor,
   setMarkupDrawFontSize,
-  setMarkupDrawLineWeight,
   subscribeMarkupDrawStyle
 } from '../src/command/markup/AcApMarkupUtil'
 import {
+  acapBindDrawStyleSessionAccessory,
   acapDrawStyleKindForCommand,
   acapIsDrawStyleToolbarVisible,
+  acapRegisterDrawStyleSessionHost,
   acapResolveDrawStyleKind,
   acapSetDrawStyleHostHasRibbon,
   acapSetDrawStyleToolbarVisible,
   acapShouldShowDrawStyleToolbar,
-  acapSubscribeDrawStyleToolbarVisibility
+  acapSubscribeDrawStyleToolbarVisibility,
+  acapUnregisterDrawStyleSessionHost
 } from '../src/ui/AcApDrawStyle'
 
 describe('subscribeMarkupDrawStyle', () => {
-  it('notifies when markup draw color, line weight, or font size change', () => {
+  it('notifies when markup draw color or font size change', () => {
     const seen: string[] = []
     const unsubscribe = subscribeMarkupDrawStyle(() => seen.push('change'))
     setMarkupDrawColor(new AcCmColor(AcCmColorMethod.ByACI, 3))
-    setMarkupDrawLineWeight(AcGiLineWeight.LineWeight013)
     setMarkupDrawFontSize(16)
     unsubscribe()
     setMarkupDrawColor(createDefaultMarkupColor())
-    setMarkupDrawLineWeight(MARKUP_LINE_WEIGHT)
     setMarkupDrawFontSize(MARKUP_FONT_SIZE)
-    expect(seen).toEqual(['change', 'change', 'change'])
+    expect(seen).toEqual(['change', 'change'])
   })
 })
 
 describe('acapDrawStyleKindForCommand', () => {
   it('classifies measurement drawing commands', () => {
     expect(acapDrawStyleKindForCommand('measuredistance')).toBe('measure')
+    expect(acapDrawStyleKindForCommand('measurecontinuous')).toBe('measure')
     expect(acapDrawStyleKindForCommand('MEASUREANGLE')).toBe('measure')
   })
 
@@ -219,5 +218,27 @@ describe('isMarkupDoublePointer', () => {
     expect(isMarkupDoublePointer(undefined, { t: 1000, x: 0, y: 0 })).toBe(
       false
     )
+  })
+})
+
+describe('acapBindDrawStyleSessionAccessory', () => {
+  it('returns the view toolbar accessory and clears after unregister', () => {
+    const view = {}
+    const accessory = {
+      id: 'draw-style',
+      mount: jest.fn(),
+      unmount: jest.fn()
+    }
+    acapRegisterDrawStyleSessionHost(view as never, {
+      createSessionAccessory: () => accessory
+    })
+    const command = {
+      createSessionAccessory: (_context: unknown) =>
+        null as typeof accessory | null
+    }
+    acapBindDrawStyleSessionAccessory(command)
+    expect(command.createSessionAccessory({ view })).toBe(accessory)
+    acapUnregisterDrawStyleSessionHost(view as never)
+    expect(command.createSessionAccessory({ view })).toBeNull()
   })
 })
