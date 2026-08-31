@@ -191,8 +191,11 @@ jobs:
             echo "Synchronization PR #${existing} already exists."
             exit 0
           fi
-          gh pr create \
-            --base main \
-            --head "${SYNC_BRANCH}" \
-            --title "chore: synchronize upstream main ${UPSTREAM_SHA}" \
-            --body "Automated upstream synchronization from mlightcad/cad-viewer.\n\nSource SHA: ${UPSTREAM_SHA}\n\nClean upstream health and downstream candidate validation passed. Review before merging."
+          title="chore: synchronize upstream main ${UPSTREAM_SHA}"
+          body="Automated upstream synchronization from mlightcad/cad-viewer. Source SHA: ${UPSTREAM_SHA}. Clean upstream health and downstream candidate validation passed. Review before merging."
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" \
+            -f base=main \
+            -f head="${SYNC_BRANCH}" \
+            -f title="${title}" \
+            -f body="${body}" \
+            --jq '.html_url'
