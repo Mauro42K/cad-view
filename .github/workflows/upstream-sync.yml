@@ -186,16 +186,29 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UPSTREAM_SHA: ${{ steps.upstream_health.outputs.upstream_sha }}
         run: |
-          existing="$(gh pr list --base main --head "${SYNC_BRANCH}" --state open --json number --jq '.[0].number')"
+          existing="$(gh pr list --base main --head "${GITHUB_REPOSITORY_OWNER}:${SYNC_BRANCH}" --state open --json number --jq '.[0].number')"
           if [ -n "$existing" ]; then
             echo "Synchronization PR #${existing} already exists."
             exit 0
           fi
           title="chore: synchronize upstream main ${UPSTREAM_SHA}"
           body="Automated upstream synchronization from mlightcad/cad-viewer. Source SHA: ${UPSTREAM_SHA}. Clean upstream health and downstream candidate validation passed. Review before merging."
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" \
+          set +e
+          response="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" \
             -f base=main \
             -f head="${SYNC_BRANCH}" \
             -f title="${title}" \
             -f body="${body}" \
-            --jq '.html_url'
+            --jq '.html_url' 2>&1)"
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo "$response"
+            exit 0
+          fi
+          if echo "$response" | grep -Fq 'A pull request already exists'; then
+            echo 'Synchronization PR already exists; treating duplicate creation as a normal no-op.'
+            exit 0
+          fi
+          echo "$response" >&2
+          exit "$status"
