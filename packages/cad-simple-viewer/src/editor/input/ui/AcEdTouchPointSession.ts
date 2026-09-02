@@ -1,7 +1,7 @@
 /**
  * Long-press delay before the snap loupe appears, in milliseconds.
  */
-export const ACED_TOUCH_POINT_LONG_PRESS_MS = 350
+export const ACED_TOUCH_POINT_LONG_PRESS_MS = 1000
 
 /**
  * Pointer movement in CSS pixels that cancels a pending long-press so the
@@ -122,6 +122,24 @@ export function acedShouldIgnoreCompatMouse(
   now: number = performance.now()
 ): boolean {
   return followingClickSink != null || now < ignoreCompatMouseUntil
+}
+
+/**
+ * Whether a `contextmenu` event is leftover from a touch long-press.
+ *
+ * Phones synthesize `contextmenu` ~500ms after finger-down — the same
+ * gesture that opens the snap loupe. Point prompts treat right-click as
+ * Enter; that leftover must not cancel the command.
+ *
+ * After `pointercancel`, some browsers omit `firesTouchEvents` and report
+ * `button === 2`. The compat-mouse guard covers that case.
+ *
+ * @param event - Context-menu mouse event.
+ * @returns True when the event should not be treated as right-click Enter.
+ */
+export function acedIsTouchLongPressContextMenu(event: MouseEvent): boolean {
+  if (acedIsTouchDerivedMouseEvent(event)) return true
+  return acedShouldIgnoreCompatMouse()
 }
 
 /**
