@@ -234,6 +234,38 @@ describe('AcEdMobileCommandChrome', () => {
     media.restore()
   })
 
+  it('lets accessory children receive pointerdown while sinking bubbles to the host', () => {
+    const media = installMatchMedia(
+      query => query === ML_UI_MOBILE_MEDIA_QUERY
+    )
+    const childHit = jest.fn()
+    const hostHit = jest.fn()
+    host.addEventListener('pointerdown', hostHit)
+
+    chrome.show(
+      {
+        prompt: 'Specify point',
+        keywords: [],
+        allowNone: true,
+        showMetrics: false
+      },
+      { onConfirm: jest.fn(), onCancel: jest.fn(), onKeyword: jest.fn() }
+    )
+    chrome.prepareAccessory()
+    const mountHost = chrome.accessoryHost
+    const child = document.createElement('button')
+    child.type = 'button'
+    child.addEventListener('pointerdown', childHit)
+    mountHost.appendChild(child)
+
+    child.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+
+    expect(childHit).toHaveBeenCalledTimes(1)
+    expect(hostHit).not.toHaveBeenCalled()
+    host.removeEventListener('pointerdown', hostHit)
+    media.restore()
+  })
+
   it('hides the overlay and clears the host class', () => {
     const media = installMatchMedia(
       query => query === ML_UI_MOBILE_MEDIA_QUERY
@@ -313,34 +345,26 @@ describe('AcEdMobileCommandChrome', () => {
     media.restore()
   })
 
-  it('mounts the accessory as the first panel row and unmounts on hide', () => {
+  it('exposes an accessory host and clears it on hide', () => {
     const media = installMatchMedia(
       query => query === ML_UI_MOBILE_MEDIA_QUERY
     )
-    const mount = jest.fn((host: HTMLElement) => {
-      host.appendChild(document.createElement('span'))
-    })
-    const unmount = jest.fn()
     chrome.show(
       {
         prompt: 'Specify point',
         keywords: [],
         allowNone: true,
-        showMetrics: false,
-        accessory: { id: 'draw-style', mount, unmount }
+        showMetrics: false
       },
       { onConfirm: jest.fn(), onCancel: jest.fn(), onKeyword: jest.fn() }
     )
-    const accessory = host.querySelector(
-      '.ml-mobile-cmd-accessory'
-    ) as HTMLElement
+    chrome.prepareAccessory()
+    const accessory = chrome.accessoryHost
     expect(accessory.hidden).toBe(false)
-    expect(mount).toHaveBeenCalledTimes(1)
-    expect(mount.mock.calls[0][0]).toBe(accessory)
+    accessory.appendChild(document.createElement('span'))
     expect(accessory.firstElementChild?.tagName).toBe('SPAN')
 
     chrome.hide()
-    expect(unmount).toHaveBeenCalledTimes(1)
     expect(accessory.hidden).toBe(true)
     expect(accessory.childElementCount).toBe(0)
     media.restore()

@@ -67,5 +67,23 @@ export default {
   drawStyle: {
     color: '颜色',
     fontSize: '字号'
+  },
+  colorPicker: {
+    title: '选择颜色',
+    close: '关闭',
+    ok: '确定',
+    cancel: '取消',
+    index: '颜色索引：',
+    rgb: 'RGB：',
+    input: '颜色',
+    inputPlaceholder: '1-255 或 #RRGGBB'
+  },
+  touchPointTutorial: {
+    title: '怎样可以精确取点？',
+    description:
+      '手指在屏幕上长按1s左右，上方出现十字，手指移动时十字跟随移动并自动捕捉。取点更精准。',
+    snoozeToday: '今日不再提醒',
+    hideForever: '不再提醒',
+    ok: '我知道了'
   }
 }

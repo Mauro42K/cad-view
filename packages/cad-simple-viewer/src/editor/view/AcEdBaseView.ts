@@ -14,6 +14,11 @@ import {
 import { debounce } from 'lodash-es'
 
 import type { AcTrSpatialSearchOptions } from '../../spatialIndex/AcTrSpatialIndex'
+import type {
+  AcEdSessionAccessory,
+  AcEdSessionAccessoryHostInfo
+} from '../command/AcEdSessionAccessory'
+import { AcEdSessionProviderRegistry } from '../command/AcEdSessionProviderRegistry'
 import { AcEdCorsorType, AcEdSelectionSet } from '../input'
 import { AcEditor } from '../input/AcEditor'
 import { AcEdOsnapResolver } from '../input/AcEdOsnapResolver'
@@ -278,6 +283,12 @@ export abstract class AcEdBaseView {
   /** The HTML element to contain this view */
   protected _container: HTMLElement
 
+  /**
+   * Long-lived session UI providers for this view (draw-style, etc.).
+   * Feature installs register here; mountable accessories are minted on demand.
+   */
+  readonly sessionProviders = new AcEdSessionProviderRegistry()
+
   /** Events fired by the view for various interactions */
   public readonly events = {
     /** Fired when mouse moves over the view */
@@ -372,6 +383,29 @@ export abstract class AcEdBaseView {
    */
   get editor() {
     return this._editor
+  }
+
+  /**
+   * Active mount target for session accessories (desktop slot or mobile panel).
+   */
+  get sessionAccessoryHost(): AcEdSessionAccessoryHostInfo {
+    return this._editor.inputManager.sessionAccessoryHost
+  }
+
+  /**
+   * Selection-driven session accessory shown when no command accessory is mounted.
+   */
+  get selectionSessionAccessory(): AcEdSessionAccessory | null {
+    return this._editor.inputManager.selectionSessionAccessory
+  }
+
+  /**
+   * Updates the selection-driven session accessory forwarded to the input manager.
+   *
+   * @param value - Accessory to show on selection, or `null` to clear.
+   */
+  set selectionSessionAccessory(value: AcEdSessionAccessory | null) {
+    this._editor.inputManager.selectionSessionAccessory = value
   }
 
   /**
@@ -1088,7 +1122,6 @@ export abstract class AcEdBaseView {
   ): { x: number; y: number } {
     const cursorWcs = { x: cursor.x, y: cursor.y, z: 0 }
     this._overlayGripOsnapMarkers ??= new AcEdMarkerManager(this)
-    this._overlayGripOsnapMarkers.hideMarker()
     const snapPoint = this._osnapResolver.resolve({
       cursorWcs,
       lastPoint: lastPoint
@@ -1102,12 +1135,13 @@ export abstract class AcEdBaseView {
       )
     )
     if (snapPoint) {
-      this._overlayGripOsnapMarkers.showMarker(
+      this._overlayGripOsnapMarkers.showOrRepositionMarker(
         snapPoint,
         AcEdOsnapResolver.osnapModeToMarkerType(snapPoint.type)
       )
       return { x: snapPoint.x, y: snapPoint.y }
     }
+    this._overlayGripOsnapMarkers.hideMarker()
     return { x: cursor.x, y: cursor.y }
   }
 
@@ -1119,7 +1153,13 @@ export abstract class AcEdBaseView {
     this._osnapResolver.clearAcquiredCenters()
   }
 
-  protected onWindowResize() {
+  /**
+   * Updates {@link width} / {@link height} from the size callback or canvas
+   * client size without notifying listeners. Subclasses that must sync
+   * projection (camera frustum, renderer buffer) before notifying should call
+   * this first, then dispatch {@link events.viewResize} themselves.
+   */
+  protected refreshViewSize() {
     if (this._calculateSizeCallback) {
       const { width, height } = this._calculateSizeCallback()
       this._width = Math.max(1, Math.floor(width))
@@ -1128,6 +1168,10 @@ export abstract class AcEdBaseView {
       this._width = Math.max(1, Math.floor(this._canvas.clientWidth))
       this._height = Math.max(1, Math.floor(this._canvas.clientHeight))
     }
+  }
+
+  protected onWindowResize() {
+    this.refreshViewSize()
     this.events.viewResize.dispatch({
       width: this._width,
       height: this._height

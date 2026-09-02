@@ -10,15 +10,20 @@ import {
 
 import { AcApDocManager, AcApSettingManager } from '../../../app'
 import { AcApI18n } from '../../../i18n'
-import type { AcEdSessionAccessory } from '../../command/AcEdSessionAccessory'
+import { AcUiTouchPointTutorialDialog } from '../../../ui/AcUiTouchPointTutorialDialog'
+import type {
+  AcEdSessionAccessory,
+  AcEdSessionAccessoryHostInfo
+} from '../../command/AcEdSessionAccessory'
 import {
   acedIsMobileOrPadUi,
   acedShouldHideDesktopCommandLine,
   acedSubscribeUiLayout
 } from '../../global/AcEdUiLayout'
-import { AcEdBaseView } from '../../view'
+import type { AcEdBaseView } from '../../view'
 import { AcEdInputModifiers } from '../AcEdInputModifiers'
 import { AcEdInputToggles } from '../AcEdInputToggles'
+import type { AcEditor } from '../AcEditor'
 import { AcEdSelectionSet } from '../AcEdSelectionSet'
 import {
   AcEdAngleHandler,
@@ -32,6 +37,7 @@ import {
 } from '../handler'
 import { AcEdPointInputContext } from '../handler/AcEdInputHandler'
 import { AcEdKeywordHandler } from '../handler/AcEdKeywordHandler'
+import { AcEdMarkerManager } from '../marker'
 import {
   AcEdPromptAngleOptions,
   AcEdPromptBoxOptions,
@@ -74,7 +80,11 @@ import {
   acedComputeSessionMetrics,
   type AcEdMobileSessionMetrics
 } from './AcEdMobileSessionMetrics'
-import { acedShouldIgnoreCompatMouse } from './AcEdTouchPointSession'
+import { AcEdSessionAccessoryController } from './AcEdSessionAccessoryController'
+import {
+  acedIsTouchLongPressContextMenu,
+  acedShouldIgnoreCompatMouse
+} from './AcEdTouchPointSession'
 
 /**
  * Internal control-flow error used to propagate keyword picks out of
@@ -126,10 +136,22 @@ export class AcEdInputManager {
   /** Stores last confirmed point from getPoint() or getBox() */
   private lastPoint: AcGePoint2dLike | null = null
 
+  /**
+   * Plus marks at confirmed pick points for the active command.
+   * Positions accumulate across sequential {@link getPoint} prompts (including
+   * scripted ones); DOM marks appear only when a later interactive prompt
+   * starts so single-point commands do not flash a mark. Cleared on command end.
+   */
+  private _confirmedPointMarks: AcEdMarkerManager | null = null
+  private _confirmedPointPositions: AcGePoint2dLike[] = []
+  private readonly _boundRepositionConfirmedPointMarks: () => void
+
   /** Command line UI component */
   private _commandLine: AcEdCommandLine
   /** Phone/pad prompt bar + session panel (hidden on desktop). */
   private _mobileChrome: AcEdMobileCommandChrome
+  /** Desktop/mobile session accessory host resolution and selection mounts. */
+  private readonly _sessionAccessoryController: AcEdSessionAccessoryController
   /** Buffered command-line style inputs (each item is one Enter-confirmed value). */
   private _scriptInputs: string[] = []
   /** Current modifier key state during input sessions. */
@@ -166,9 +188,13 @@ export class AcEdInputManager {
    * positioning and live preview updates.
    *
    * @param view - The view associated with the input manager
+   * @param editorEvents - Editor event bus; passed in because `view.editor` is
+   *   not assigned until {@link AcEditor} finishes constructing.
    */
-  constructor(view: AcEdBaseView) {
+  constructor(view: AcEdBaseView, editorEvents: AcEditor['events']) {
     this.view = view
+    this._boundRepositionConfirmedPointMarks = () =>
+      this.repositionConfirmedPointMarks()
     this.injectCSS()
     // Newly added UI overlays (command line, previews) are container-local.
     // Ensure absolute-positioned children are anchored to this view only.
@@ -179,6 +205,13 @@ export class AcEdInputManager {
     const commandLine = new AcEdCommandLine(this.view.container)
     this._commandLine = commandLine
     this._mobileChrome = new AcEdMobileCommandChrome(this.view.container)
+    this._sessionAccessoryController = new AcEdSessionAccessoryController({
+      view: this.view,
+      getMobileChrome: () => this._mobileChrome,
+      isMobilePromptOpen: () => this._mobileChrome.isOpen,
+      getEditorEvents: () => editorEvents
+    })
+    this._sessionAccessoryController.bindEditorEvents()
     this.syncDesktopCommandLineVisibility()
     AcApSettingManager.instance.events.modified.addEventListener(() => {
       this.syncDesktopCommandLineVisibility()
@@ -188,7 +221,54 @@ export class AcEdInputManager {
       if (!acedIsMobileOrPadUi() && this._mobileChrome.isOpen) {
         this._mobileChrome.hide()
       }
+      this._sessionAccessoryController.remountActiveSessionAccessory()
     })
+    this.view.events.viewChanged.addEventListener(
+      this._boundRepositionConfirmedPointMarks
+    )
+    this.view.events.viewResize.addEventListener(
+      this._boundRepositionConfirmedPointMarks
+    )
+    // Safety net: if a prompt failed to clean up, close the mobile session
+    // panel when the command finishes so the bottom chrome cannot linger.
+    // Also clear confirmed-point plus marks for the finished command.
+    editorEvents.commandEnded.addEventListener(() => {
+      this.clearConfirmedPointMarks()
+      if (this._mobileChrome.isOpen) {
+        this.endMobilePrompt()
+      }
+    })
+  }
+
+  /**
+   * Whether the phone/pad bottom session panel is open for the current prompt.
+   */
+  get isMobilePromptOpen(): boolean {
+    return this._mobileChrome.isOpen
+  }
+
+  /** Mobile session panel chrome. */
+  get mobileChrome(): AcEdMobileCommandChrome {
+    return this._mobileChrome
+  }
+
+  /** Active mount target for session accessories. */
+  get sessionAccessoryHost(): AcEdSessionAccessoryHostInfo {
+    return this._sessionAccessoryController.sessionAccessoryHost
+  }
+
+  /** Selection-driven accessory shown when no command accessory is mounted. */
+  get selectionSessionAccessory(): AcEdSessionAccessory | null {
+    return this._sessionAccessoryController.selectionSessionAccessory
+  }
+
+  /**
+   * Updates the selection-driven accessory on the session accessory controller.
+   *
+   * @param value - Accessory to show on selection, or `null` to clear.
+   */
+  set selectionSessionAccessory(value: AcEdSessionAccessory | null) {
+    this._sessionAccessoryController.selectionSessionAccessory = value
   }
 
   /**
@@ -274,6 +354,7 @@ export class AcEdInputManager {
     keywords?: AcEdMobileKeywordChip[]
     allowNone: boolean
     showMetrics: boolean
+    touchPointTutorial?: boolean
     onConfirm: () => void
     onCancel: () => void
     onKeyword: (globalName: string) => void
@@ -285,8 +366,7 @@ export class AcEdInputManager {
         prompt: args.prompt,
         keywords: args.keywords ?? [],
         allowNone: args.allowNone,
-        showMetrics: args.showMetrics,
-        accessory: this.resolveSessionAccessory()
+        showMetrics: args.showMetrics
       },
       {
         onConfirm: args.onConfirm,
@@ -294,24 +374,17 @@ export class AcEdInputManager {
         onKeyword: args.onKeyword
       }
     )
-  }
-
-  /**
-   * Asks the active command for session-panel widgets (color / font size).
-   */
-  private resolveSessionAccessory(): AcEdSessionAccessory | null {
-    const manager = AcApDocManager.instance
-    return (
-      manager.commandManager.activeCommand?.createSessionAccessory(
-        manager.context
-      ) ?? null
-    )
+    this._sessionAccessoryController.remountActiveSessionAccessory()
+    if (args.touchPointTutorial) {
+      void AcUiTouchPointTutorialDialog.maybeShow(this.view.container)
+    }
   }
 
   /** Closes the mobile command chrome and restores desktop CLI visibility. */
   private endMobilePrompt(): void {
     this._mobileChrome.hide()
     this.syncDesktopCommandLineVisibility()
+    this._sessionAccessoryController.remountActiveSessionAccessory()
   }
 
   /**
@@ -1801,8 +1874,14 @@ export class AcEdInputManager {
     const scriptedValue = this.tryGetScriptedPoint(options)
     if (scriptedValue != null) {
       cleanup?.()
-      return Promise.resolve(scriptedValue)
+      // Record for later interactive prompts in the same command; no DOM yet.
+      this.recordConfirmedPointMarkIfNeeded(options, scriptedValue)
+      return scriptedValue
     }
+
+    // Show marks for points confirmed earlier in this command while picking
+    // the next one (avoids a flash when the command ends after a single pick).
+    this.showConfirmedPointMarksIfAny()
 
     const getDynamicValue = (pos: AcGePoint2dLike) => {
       return {
@@ -1815,7 +1894,7 @@ export class AcEdInputManager {
     }
 
     const handler = new AcEdPointHandler(options)
-    return this.makeFloatingInputPromise<AcGePoint3dLike>({
+    const value = await this.makeFloatingInputPromise<AcGePoint3dLike>({
       inputCount: 2,
       promptOptions: options,
       disableOSnap: options.disableOSnap,
@@ -1824,6 +1903,59 @@ export class AcEdInputManager {
       getDynamicValue,
       drawPreview
     })
+    this.recordConfirmedPointMarkIfNeeded(options, value)
+    return value
+  }
+
+  /**
+   * Whether a confirmed-point plus mark should be tracked for this prompt.
+   *
+   * Explicit {@link AcEdPromptPointOptions.showConfirmedPointMark} overrides
+   * the phone/pad default.
+   */
+  private shouldShowConfirmedPointMark(
+    options: AcEdPromptPointOptions
+  ): boolean {
+    const override = options.showConfirmedPointMark
+    if (override !== undefined) return override
+    return acedIsMobileOrPadUi()
+  }
+
+  /**
+   * Records a confirmed pick for later display when enabled for the prompt.
+   * DOM marks are deferred until {@link showConfirmedPointMarksIfAny}.
+   */
+  private recordConfirmedPointMarkIfNeeded(
+    options: AcEdPromptPointOptions,
+    point: AcGePoint3dLike
+  ): void {
+    if (!this.shouldShowConfirmedPointMark(options)) return
+    this._confirmedPointPositions.push({ x: point.x, y: point.y })
+  }
+
+  /**
+   * Renders plus marks for points already confirmed in this command.
+   * Called at the start of an interactive {@link getPointInternal}.
+   */
+  private showConfirmedPointMarksIfAny(): void {
+    if (this._confirmedPointPositions.length === 0) return
+    this._confirmedPointMarks ??= new AcEdMarkerManager(this.view)
+    this._confirmedPointMarks.setHintMarkers(
+      this._confirmedPointPositions,
+      'plus'
+    )
+  }
+
+  /** Repositions confirmed-point marks after pan/zoom. */
+  private repositionConfirmedPointMarks(): void {
+    this._confirmedPointMarks?.repositionHints()
+  }
+
+  /** Clears all confirmed-point plus marks for the finished command. */
+  private clearConfirmedPointMarks(): void {
+    this._confirmedPointMarks?.clear()
+    this._confirmedPointMarks = null
+    this._confirmedPointPositions = []
   }
 
   /**
@@ -2264,6 +2396,7 @@ export class AcEdInputManager {
         ),
         allowNone,
         showMetrics,
+        touchPointTutorial: true,
         onConfirm: () => noneRejector(),
         onCancel: () => rejector(),
         onKeyword: keywordRejector
@@ -2282,6 +2415,13 @@ export class AcEdInputManager {
         }
       }
       const contextMenuHandler = (e: MouseEvent) => {
+        // Phone long-press synthesizes contextmenu while the snap loupe is
+        // opening. That is not right-click Enter — swallowing it would
+        // cancel the measure / point prompt as soon as the loupe appears.
+        if (acedIsTouchLongPressContextMenu(e) || acedIsMobileOrPadUi()) {
+          e.preventDefault()
+          return
+        }
         if (!this.shouldUseRightClickEnter()) return
         e.preventDefault()
         noneRejector()
