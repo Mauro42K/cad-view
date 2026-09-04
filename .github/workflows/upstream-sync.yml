@@ -5,6 +5,10 @@ on:
   schedule:
     - cron: '17 4 * * *'
 
+concurrency:
+  group: upstream-synchronization
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -15,9 +19,9 @@ env:
   VERCEL_TEAM_ID: team_59ltVAfw1BgF3dX6dn1pT2OF
   VERCEL_TEAM_SLUG: mauricios-projects-e89a04cd
   DOWNSTREAM_ALLOWLIST: |-
-    AGENTS.md
     .github/workflows/ci.yml
     .github/workflows/upstream-sync.yml
+    AGENTS.md
     docs/DEPENDENCY_POLICY.md
     docs/DOWNSTREAM_MAINTENANCE.md
     vercel.json
