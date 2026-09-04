@@ -227,9 +227,10 @@ jobs:
               | jq -r --arg branch "${SYNC_BRANCH}" '[.[] | select(.base.ref == "main" and .head.ref == $branch)] | .[0].number // empty'
           }
           existing="$(find_existing_pr)"
-          pr_created=false
+          pr_mutated=false
           if [ -n "$existing" ]; then
             pr_number="$existing"
+            pr_mutated=true
             for edit_attempt in $(seq 1 6); do
               if gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" \
                 -f title="${title}" -f body="${body}" >/dev/null; then
@@ -248,7 +249,7 @@ jobs:
             if response="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" \
               -f base=main -f head="${SYNC_BRANCH}" -f title="${title}" -f body="${body}" 2>"${create_error}")"; then
               pr_number="$(jq -r '.number' <<<"${response}")"
-              pr_created=true
+              pr_mutated=true
               echo "Created synchronization PR #${pr_number}."
             else
               existing="$(find_existing_pr)"
@@ -274,7 +275,7 @@ jobs:
             head_sha="$(jq -r '.headRefOid' <<<"${pr_state}")"
             base_sha="$(jq -r '.baseRefOid' <<<"${pr_state}")"
             if [ "$(jq -r '.state' <<<"${pr_state}")" != 'OPEN' ] || [ "${head_sha}" != "${expected_head}" ] || [ "${base_sha}" != "${expected_base}" ]; then
-              if [ "${pr_created}" = true ] && [ "${attempt}" -lt 7 ]; then
+              if [ "${pr_mutated}" = true ] && [ "${attempt}" -lt 7 ]; then
                 echo "GitHub is still materializing the new PR; retrying (${attempt}/6)."
                 sleep 5
                 continue
