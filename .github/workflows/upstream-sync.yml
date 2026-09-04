@@ -172,12 +172,18 @@ jobs:
 
       - name: Push synchronization branch
         if: steps.reconcile.outputs.changed == 'true'
+        env:
+          SYNC_PUSH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
         run: |
+          if [ -z "${SYNC_PUSH_TOKEN}" ]; then
+            echo 'UPSTREAM_SYNC_TOKEN repository secret is required to publish workflow-file changes.' >&2
+            exit 1
+          fi
           if git show-ref --verify --quiet "refs/remotes/origin/${SYNC_BRANCH}"; then
             lease="$(git rev-parse "refs/remotes/origin/${SYNC_BRANCH}")"
-            git push --force-with-lease="refs/heads/${SYNC_BRANCH}:${lease}" origin "${SYNC_BRANCH}:${SYNC_BRANCH}"
+            git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${SYNC_PUSH_TOKEN}" | base64 -w0)" push --force-with-lease="refs/heads/${SYNC_BRANCH}:${lease}" origin "${SYNC_BRANCH}:${SYNC_BRANCH}"
           else
-            git push origin "${SYNC_BRANCH}:${SYNC_BRANCH}"
+            git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${SYNC_PUSH_TOKEN}" | base64 -w0)" push origin "${SYNC_BRANCH}:${SYNC_BRANCH}"
           fi
 
       - name: Create synchronization PR when absent
