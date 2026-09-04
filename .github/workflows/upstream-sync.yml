@@ -11,6 +11,9 @@ permissions:
 env:
   SYNC_BRANCH: chore/upstream-sync
   UPSTREAM_REPOSITORY: mlightcad/cad-viewer
+  VERCEL_PROJECT_ID: prj_rTscpKmChu5EXZKBXcCh6mzC01Q2
+  VERCEL_TEAM_ID: team_59ltVAfw1BgF3dX6dn1pT2OF
+  VERCEL_TEAM_SLUG: mauricios-projects-e89a04cd
   DOWNSTREAM_ALLOWLIST: |-
     AGENTS.md
     .github/workflows/ci.yml
@@ -22,7 +25,7 @@ env:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: write
       pull-requests: write
@@ -210,6 +213,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UPSTREAM_SHA: ${{ steps.upstream_health.outputs.upstream_sha }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
           title="chore: synchronize upstream main ${UPSTREAM_SHA}"
@@ -263,6 +267,59 @@ jobs:
               git fetch --prune origin main
               git merge-base --is-ancestor "${merge_sha}" origin/main
               git merge-base --is-ancestor "${UPSTREAM_SHA}" origin/main
+              if [ -z "${VERCEL_TOKEN}" ]; then
+                echo 'VERCEL_TOKEN repository secret is required for post-merge Production verification.' >&2
+                exit 1
+              fi
+              production_id=''
+              retry_used=false
+              for production_attempt in $(seq 1 30); do
+                deployments="$(curl --fail --silent --show-error --retry 2 \
+                  -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+                  "https://api.vercel.com/v13/deployments?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_TEAM_ID}&limit=50")"
+                production_id="$(jq -r --arg sha "${merge_sha}" '[.deployments[] | select(.target == "production" and .meta.githubCommitSha == $sha)] | sort_by(.created) | last | (.id // "")' <<<"${deployments}")"
+                if [ -z "${production_id}" ]; then
+                  sleep 20
+                  continue
+                fi
+                production="$(curl --fail --silent --show-error --retry 2 \
+                  -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+                  "https://api.vercel.com/v13/deployments/${production_id}?teamId=${VERCEL_TEAM_ID}")"
+                production_state="$(jq -r '.readyState // .state // "UNKNOWN"' <<<"${production}")"
+                if [ "${production_state}" = 'READY' ]; then
+                  break
+                fi
+                if [ "${production_state}" = 'ERROR' ]; then
+                  detail_file="${RUNNER_TEMP}/vercel-production-detail.json"
+                  log_file="${RUNNER_TEMP}/vercel-production-events.log"
+                  printf '%s' "${production}" > "${detail_file}"
+                  curl --fail --silent --show-error --retry 2 \
+                    -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+                    "https://api.vercel.com/v3/deployments/${production_id}/events?teamId=${VERCEL_TEAM_ID}&limit=200" > "${log_file}" || true
+                  if [ "${retry_used}" = false ] \
+                    && jq -e '.errorCode == "package_not_found"' "${detail_file}" >/dev/null \
+                    && grep -Fq '@vue/language-core' "${log_file}" \
+                    && grep -Fq 'unplugin-dts' "${log_file}"; then
+                    retry_used=true
+                    git switch --detach origin/main
+                    npx --yes vercel@54.21.1 deploy --prod --force --yes \
+                      --project "${VERCEL_PROJECT_ID}" --scope "${VERCEL_TEAM_SLUG}" \
+                      --token "${VERCEL_TOKEN}" --meta "githubCommitSha=${merge_sha}" >/dev/null
+                    production_id=''
+                    continue
+                  fi
+                  echo 'Production failed with a non-retriable error or the single clean retry already ran.' >&2
+                  exit 1
+                fi
+                sleep 20
+              done
+              final_production="$(curl --fail --silent --show-error --retry 2 \
+                -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+                "https://api.vercel.com/v13/deployments/${production_id}?teamId=${VERCEL_TEAM_ID}")"
+              if [ "$(jq -r '.readyState // .state // "UNKNOWN"' <<<"${final_production}")" != 'READY' ]; then
+                echo 'Production did not reach READY for the exact merged main SHA within the timeout.' >&2
+                exit 1
+              fi
               {
                 echo '## Automatic upstream synchronization merged'
                 echo
@@ -272,6 +329,7 @@ jobs:
                 echo '- Method: normal merge'
                 echo '- Branch cleanup: passed'
                 echo '- Required candidate, parity, CodeQL, and Vercel gates: passed'
+                echo "- Production deployment: \`${production_id}\` READY"
               } >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
