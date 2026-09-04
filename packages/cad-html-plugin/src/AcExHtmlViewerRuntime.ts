@@ -10,10 +10,10 @@ import {
   type AcExCommandSessionUiState
 } from './AcExCommandSessionPanel'
 import {
-  acExCssRectToWcsBox,
-  acExCssTopLeftRectToGl,
-  acExIntersectCssRects,
-  acExWcsBoxToCssRect
+  acexCssRectToWcsBox,
+  acexCssTopLeftRectToGl,
+  acexIntersectCssRects,
+  acexWcsBoxToCssRect
 } from './AcExCssRect'
 import {
   decryptAcExHtmlSnapshotPayload,
@@ -27,12 +27,12 @@ import {
   showAcExHtmlAccessExpired
 } from './AcExHtmlAccessGate'
 import {
-  acExHtmlIsPhoneLayout,
+  acexHtmlIsPhoneLayout,
   setupAcExHtmlDrawerSheets
 } from './AcExHtmlDrawerSheet'
 import { setupAcExHtmlExpiryMonitor } from './AcExHtmlExpiryUi'
 import { AcExHtmlI18n, detectAcExHtmlLocale } from './AcExHtmlI18n'
-import { acExHtmlIcons } from './AcExHtmlIcons'
+import { AcExHtmlIcons } from './AcExHtmlIcons'
 import { setupAcExHtmlLayoutMenu } from './AcExHtmlLayoutMenu'
 import { setupAcExHtmlMeasurePanel } from './AcExHtmlMeasurePanel'
 import { setupAcExHtmlMeasureSettings } from './AcExHtmlMeasureSettings'
@@ -43,11 +43,21 @@ import {
   setupAcExHtmlToolbarFlyouts
 } from './AcExHtmlToolbarFlyout'
 import {
+  type AcExIdlePointerHost,
+  acexIdlePointerStrategy
+} from './AcExIdlePointerStrategy'
+import {
   computeLayerExtentsMap,
   resolveLayoutViewExtents
 } from './AcExLayerExtents'
 import { AcExMarkupController, type AcExMarkupMode } from './AcExMarkup'
 import { AcExMeasureController, type AcExMeasureMode } from './AcExMeasurement'
+import {
+  acexBindMobileSnapLoupe,
+  acexHideMobileSnapLoupe,
+  acexRefreshMobileSnapLoupe,
+  acexSetMobileSnapLoupePreciseCapture
+} from './AcExMobileSnapLoupe'
 import { AcExOsnapIndex } from './AcExOsnap'
 import { AcExOsnapMarker } from './AcExOsnapMarker'
 import {
@@ -59,12 +69,17 @@ import {
   viewportPaperToModelScale
 } from './AcExPaperViewport'
 import {
-  acexCameraZoomUniform,
+  AcExCameraZoomUniform,
   createViewerLineMaterial,
   createViewerMeshMaterial,
   createViewerPointsMaterial
 } from './AcExPatternSnapshot'
+import { acexSelectionModeFromDrag } from './AcExSelectionBox'
 import { setupAcExSessionDrawStyle } from './AcExSessionDrawStyle'
+import {
+  acexHideSimulatedMouseCursor,
+  acexRefreshSimulatedMouseCursor
+} from './AcExSimulatedMouseCursor'
 import {
   ACEX_SNAP_LOUPE_INSET_PX,
   ACEX_SNAP_LOUPE_SIZE_PX,
@@ -81,8 +96,18 @@ import type {
   AcExSnapshot,
   AcExViewerMode
 } from './AcExSnapshotTypes'
-import { AcExTouchPointSession } from './AcExTouchPointSession'
-import { acExMaybeShowTouchPointTutorial } from './AcExTouchPointTutorial'
+import {
+  acexIsSimulatedMouseEnabled,
+  acexToggleSimulatedMouse,
+  type AcExTouchPickHudHost,
+  acexTouchPickStrategy
+} from './AcExTouchPickStrategy'
+import {
+  acexShouldIgnoreCompatMouse,
+  acexSinkFollowingClick,
+  AcExTouchPointSession
+} from './AcExTouchPointSession'
+import { acexMaybeShowTouchPointTutorial } from './AcExTouchPointTutorial'
 import {
   releaseLayerGroupsGeometryCpuArrays,
   releaseSnapshotBatchBuffers,
@@ -158,9 +183,8 @@ function applyHtmlTheme(theme: AcExHtmlTheme): void {
   // action (switch to the other theme).
   const nextKey = theme === 'light' ? 'toolbar.themeLight' : 'toolbar.themeDark'
   const nextIcon =
-    theme === 'light' ? acExHtmlIcons.themeLight : acExHtmlIcons.themeDark
-  const nextTitle =
-    theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'
+    theme === 'light' ? AcExHtmlIcons.themeLight : AcExHtmlIcons.themeDark
+  const nextTitle = theme === 'light' ? 'Light' : 'Dark'
   if (icon) icon.innerHTML = nextIcon
   btn.setAttribute('data-i18n-key', nextKey)
   btn.setAttribute('data-i18n-attr', 'title aria-label')
@@ -169,6 +193,36 @@ function applyHtmlTheme(theme: AcExHtmlTheme): void {
   if (label) {
     label.setAttribute('data-i18n-key', nextKey)
     label.setAttribute('data-i18n-text', '')
+  }
+}
+
+/**
+ * Syncs the simulated-mouse settings button label / active class with the
+ * persisted preference.
+ *
+ * @param enabled - Current preference value.
+ * @param i18n - Active i18n instance used to refresh visible labels.
+ */
+function syncSimulatedMouseButton(
+  enabled: boolean,
+  i18n: AcExHtmlI18n
+): void {
+  const btn = document.getElementById('mlcad-simulated-mouse-btn')
+  if (!btn) return
+  const key = enabled
+    ? 'toolbar.simulatedMouseOn'
+    : 'toolbar.simulatedMouseOff'
+  btn.classList.toggle('active', enabled)
+  btn.setAttribute('data-i18n-key', key)
+  btn.setAttribute('data-i18n-attr', 'title aria-label')
+  const title = i18n.t(key)
+  btn.setAttribute('title', title)
+  btn.setAttribute('aria-label', title)
+  const label = btn.querySelector('.mlcad-tool-btn-label')
+  if (label) {
+    label.setAttribute('data-i18n-key', key)
+    label.setAttribute('data-i18n-text', '')
+    label.textContent = title
   }
 }
 
@@ -324,6 +378,7 @@ async function startViewer(): Promise<void> {
   root.style.setProperty('--ml-ui-grip-hot', grip?.hotColorCss ?? '#ff0000')
 
   applyHtmlTheme(loadStoredTheme())
+  syncSimulatedMouseButton(acexIsSimulatedMouseEnabled(), i18n)
   i18n.applyToDocument()
 
   const initialLayout =
@@ -339,8 +394,7 @@ async function startViewer(): Promise<void> {
     snapshot.layers.map(layer => [layer.name, layer.visible])
   )
 
-  const canvasHost =
-    document.getElementById('mlcad-canvas-host') ?? root
+  const canvasHost = document.getElementById('mlcad-canvas-host') ?? root
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   canvasHost.insertBefore(renderer.domElement, canvasHost.firstChild)
@@ -516,7 +570,7 @@ async function startViewer(): Promise<void> {
     camera.top = ACEX_CAMERA_FRUSTUM
     camera.bottom = -ACEX_CAMERA_FRUSTUM
     camera.updateProjectionMatrix()
-    acexCameraZoomUniform.value = camera.zoom
+    AcExCameraZoomUniform.value = camera.zoom
     controls.update()
   }
 
@@ -528,7 +582,7 @@ async function startViewer(): Promise<void> {
     controls.target.copy(target)
     if (zoom != null) camera.zoom = zoom
     camera.updateProjectionMatrix()
-    acexCameraZoomUniform.value = camera.zoom
+    AcExCameraZoomUniform.value = camera.zoom
     controls.update()
     recomputeOsnapThresholdWcs()
     bumpSnapCacheKey()
@@ -744,12 +798,14 @@ async function startViewer(): Promise<void> {
     const nowVisible = state != null
     sessionPanel?.setState(state)
     sessionPanel?.setAccessory(
-      state ? (sessionDrawStyleRef.current?.createSessionAccessory() ?? null) : null
+      state
+        ? (sessionDrawStyleRef.current?.createSessionAccessory() ?? null)
+        : null
     )
     drawerSheetsRef.current?.syncInset()
     if (nowVisible && !sessionPanelVisible) {
       sessionChromeRef.current.hide()
-      void acExMaybeShowTouchPointTutorial(i18n)
+      void acexMaybeShowTouchPointTutorial(i18n)
     } else if (!nowVisible && sessionPanelVisible) {
       sessionChromeRef.current.restore()
     }
@@ -800,9 +856,13 @@ async function startViewer(): Promise<void> {
     }
     const idlePan = navToolsRef.current?.isPanEnabled() ?? !isToolActive()
     const drawing = isToolActive()
+    const navMode = navToolsRef.current?.getMode()
+    const idleTouchPan =
+      navMode != null && acexIdlePointerStrategy().enablesIdleTouchPan(navMode)
     setOrbitPanButtons(controls, {
       leftMousePan: idlePan,
-      oneFingerPan: (idlePan || drawing) && !preciseCaptureActive
+      oneFingerPan:
+        (idlePan || drawing || idleTouchPan) && !preciseCaptureActive
     })
     controls.enabled = !preciseCaptureActive
     sessionDrawStyleRef.current?.refresh()
@@ -819,6 +879,12 @@ async function startViewer(): Promise<void> {
     preciseCaptureActive = active
     setLeftPanForTools()
   }
+
+  acexBindMobileSnapLoupe({
+    refresh: refreshSnapLoupeHud,
+    hide: hideSnapLoupe,
+    setPreciseCaptureActive
+  })
 
   const paperWorldToScreen = (
     x: number,
@@ -893,7 +959,7 @@ async function startViewer(): Promise<void> {
       viewportCamera.setRotationFromEuler(new THREE.Euler(0, 0, twist))
       viewportCamera.zoom = fitted.zoom
       viewportCamera.updateProjectionMatrix()
-      acexCameraZoomUniform.value = fitted.zoom
+      AcExCameraZoomUniform.value = fitted.zoom
       renderer.render(modelScene, viewportCamera)
       renderer.setScissorTest(false)
     }
@@ -905,7 +971,7 @@ async function startViewer(): Promise<void> {
       savedViewportBox.w
     )
     renderer.autoClear = autoClear
-    acexCameraZoomUniform.value = camera.zoom
+    AcExCameraZoomUniform.value = camera.zoom
   }
 
   /**
@@ -936,7 +1002,7 @@ async function startViewer(): Promise<void> {
     target.setRotationFromEuler(new THREE.Euler(0, 0, twist))
     target.zoom = fitted.zoom
     target.updateProjectionMatrix()
-    acexCameraZoomUniform.value = fitted.zoom
+    AcExCameraZoomUniform.value = fitted.zoom
   }
 
   /**
@@ -949,8 +1015,14 @@ async function startViewer(): Promise<void> {
     const { width, height } = getCanvasSize()
     if (width <= 0 || height <= 0) return
     const half = ACEX_SNAP_LOUPE_SIZE_PX / ACEX_SNAP_LOUPE_ZOOM / 2
-    const p1 = screenToWcs(loupeSample.clientX - half, loupeSample.clientY - half)
-    const p2 = screenToWcs(loupeSample.clientX + half, loupeSample.clientY + half)
+    const p1 = screenToWcs(
+      loupeSample.clientX - half,
+      loupeSample.clientY - half
+    )
+    const p2 = screenToWcs(
+      loupeSample.clientX + half,
+      loupeSample.clientY + half
+    )
     const viewBox: AcExExtents = {
       minX: Math.min(p1.x, p2.x),
       minY: Math.min(p1.y, p2.y),
@@ -963,7 +1035,7 @@ async function startViewer(): Promise<void> {
       width: ACEX_SNAP_LOUPE_SIZE_PX,
       height: ACEX_SNAP_LOUPE_SIZE_PX
     }
-    const gl = acExCssTopLeftRectToGl(loupeRect, height)
+    const gl = acexCssTopLeftRectToGl(loupeRect, height)
     const autoClear = renderer.autoClear
     renderer.autoClear = false
     renderer.getViewport(savedViewportBox)
@@ -980,10 +1052,10 @@ async function startViewer(): Promise<void> {
       modelRoot.children.length > 0
     ) {
       for (const viewport of layout.viewports) {
-        const magRect = acExWcsBoxToCssRect(viewport.paper, viewBox, loupeRect)
-        const hit = acExIntersectCssRects(magRect, loupeRect)
+        const magRect = acexWcsBoxToCssRect(viewport.paper, viewBox, loupeRect)
+        const hit = acexIntersectCssRects(magRect, loupeRect)
         if (!hit) continue
-        const paperHit = acExCssRectToWcsBox(hit, viewBox, loupeRect)
+        const paperHit = acexCssRectToWcsBox(hit, viewBox, loupeRect)
         const corners = [
           paperPointToModel(viewport, paperHit.minX, paperHit.minY),
           paperPointToModel(viewport, paperHit.maxX, paperHit.minY),
@@ -996,8 +1068,13 @@ async function startViewer(): Promise<void> {
           maxX: Math.max(...corners.map(c => c.x)),
           maxY: Math.max(...corners.map(c => c.y))
         }
-        const nestedGl = acExCssTopLeftRectToGl(hit, height)
-        renderer.setScissor(nestedGl.x, nestedGl.y, nestedGl.width, nestedGl.height)
+        const nestedGl = acexCssTopLeftRectToGl(hit, height)
+        renderer.setScissor(
+          nestedGl.x,
+          nestedGl.y,
+          nestedGl.width,
+          nestedGl.height
+        )
         renderer.setViewport(
           nestedGl.x,
           nestedGl.y,
@@ -1024,7 +1101,7 @@ async function startViewer(): Promise<void> {
       savedViewportBox.w
     )
     renderer.autoClear = autoClear
-    acexCameraZoomUniform.value = camera.zoom
+    AcExCameraZoomUniform.value = camera.zoom
   }
 
   const render = () => {
@@ -1378,7 +1455,7 @@ async function startViewer(): Promise<void> {
   }
 
   controls.addEventListener('change', () => {
-    acexCameraZoomUniform.value = camera.zoom
+    AcExCameraZoomUniform.value = camera.zoom
     recomputeOsnapThresholdWcs()
     bumpSnapCacheKey()
     render()
@@ -1403,13 +1480,12 @@ async function startViewer(): Promise<void> {
 
   setupToolPointerInput({
     domElement: renderer.domElement,
+    root,
+    screenToWcs,
     getMeasure: () => measure,
     getMarkup: () => markup,
     getNavTools: () => navToolsRef.current,
-    render,
-    refreshSnapLoupeHud,
-    hideSnapLoupe,
-    setPreciseCaptureActive
+    render
   })
 
   setupPanCursorFeedback(
@@ -1486,12 +1562,15 @@ async function startViewer(): Promise<void> {
       }
     } else if (action === 'toggle-theme') {
       const current =
-        (document.documentElement.getAttribute('data-mlcad-theme') as
-          | AcExHtmlTheme
-          | null) ?? 'dark'
+        (document.documentElement.getAttribute(
+          'data-mlcad-theme'
+        ) as AcExHtmlTheme | null) ?? 'dark'
       const next: AcExHtmlTheme = current === 'dark' ? 'light' : 'dark'
       applyHtmlTheme(next)
       i18n.applyToDocument()
+    } else if (action === 'toggle-simulated-mouse') {
+      const enabled = acexToggleSimulatedMouse()
+      syncSimulatedMouseButton(enabled, i18n)
     } else if (action === 'switch-bg') {
       switchDrawingBackground()
     }
@@ -1539,7 +1618,7 @@ async function startViewer(): Promise<void> {
     },
     onOpen: (menuId, menuRoot) => {
       layoutMenuRef.current?.close()
-      if (acExHtmlIsPhoneLayout()) {
+      if (acexHtmlIsPhoneLayout()) {
         closeLayerDrawer()
         reviewPanel?.close()
         measurePanel?.close()
@@ -1575,7 +1654,7 @@ async function startViewer(): Promise<void> {
     onSelect: switchLayout,
     closeOtherFlyouts: () => {
       toolbarFlyouts.close()
-      if (acExHtmlIsPhoneLayout()) {
+      if (acexHtmlIsPhoneLayout()) {
         closeLayerDrawer()
         reviewPanel?.close()
         measurePanel?.close()
@@ -1608,9 +1687,9 @@ async function startViewer(): Promise<void> {
     }
     // Theme button keys may have been overwritten by applyToDocument; re-sync.
     applyHtmlTheme(
-      (document.documentElement.getAttribute('data-mlcad-theme') as
-        | AcExHtmlTheme
-        | null) ?? 'dark'
+      (document.documentElement.getAttribute(
+        'data-mlcad-theme'
+      ) as AcExHtmlTheme | null) ?? 'dark'
     )
     i18n.applyToDocument()
     sessionDrawStyleRef.current?.refresh()
@@ -1745,8 +1824,8 @@ function setupToolbarCollapse(
   const syncToggle = () => {
     sidebar.classList.toggle('mlcad-sidebar--collapsed', collapsed)
     toggleBtn.innerHTML = collapsed
-      ? acExHtmlIcons.chevronDown
-      : acExHtmlIcons.chevronUp
+      ? AcExHtmlIcons.chevronDown
+      : AcExHtmlIcons.chevronUp
     toggleBtn.setAttribute('aria-expanded', String(!collapsed))
     toggleBtn.dataset.i18nKey = collapsed
       ? 'toolbar.expand'
@@ -1917,7 +1996,7 @@ function setupLayerPanel(
       zoomBtn.setAttribute('aria-label', label)
     }
     updateZoomLabels()
-    zoomBtn.innerHTML = acExHtmlIcons.zoomBox
+    zoomBtn.innerHTML = AcExHtmlIcons.zoomBox
     const extents = layerExtents.get(name)
     zoomBtn.disabled = !extents
     zoomBtn.addEventListener('click', event => {
@@ -2132,6 +2211,10 @@ function setupPanCursorFeedback(
 interface AcExToolPointerInputOptions {
   /** Canvas (or host) that receives pointer events. */
   domElement: HTMLElement
+  /** Overlay host for the selection rubber band. */
+  root: HTMLElement
+  /** Converts a client point to world XY. */
+  screenToWcs: (clientX: number, clientY: number) => { x: number; y: number }
   /** Active measure controller, or `null` when measure is disabled. */
   getMeasure: () => AcExMeasureController | null
   /** Active markup controller, or `null` when markup is disabled. */
@@ -2140,23 +2223,6 @@ interface AcExToolPointerInputOptions {
   getNavTools: () => ReturnType<typeof setupAcExHtmlNavTools> | null
   /** Redraws the scene, overlays, paper viewports, and snap loupe. */
   render: () => void
-  /**
-   * Shows the snap-loupe HUD around a client sample while a long-press is
-   * active.
-   *
-   * @param clientX - Sample X in client CSS pixels.
-   * @param clientY - Sample Y in client CSS pixels.
-   */
-  refreshSnapLoupeHud: (clientX: number, clientY: number) => void
-  /** Hides the snap-loupe HUD and clears the overlay sample. */
-  hideSnapLoupe: () => void
-  /**
-   * Toggles precise-capture mode: disables one-finger pan / OrbitControls
-   * while the loupe is open.
-   *
-   * @param active - True when the snap loupe is visible.
-   */
-  setPreciseCaptureActive: (active: boolean) => void
 }
 
 /**
@@ -2166,22 +2232,99 @@ interface AcExToolPointerInputOptions {
  * Touch drawing tools defer commit until pointerup so a long-press can open
  * the loupe; jig preview also waits until that precise-capture phase.
  *
- * @param options - Canvas, tool accessors, render callback, and loupe HUD.
+ * The snap loupe is driven through {@link acexRefreshMobileSnapLoupe} so
+ * drawing picks and overlay grip drags share one implementation.
+ *
+ * @param options - Canvas, tool accessors, and render callback.
  */
 function setupToolPointerInput(options: AcExToolPointerInputOptions): void {
   const {
     domElement,
+    root,
+    screenToWcs,
     getMeasure,
     getMarkup,
     getNavTools,
-    render,
-    refreshSnapLoupeHud,
-    hideSnapLoupe,
-    setPreciseCaptureActive
+    render
   } = options
   let pendingMove: { clientX: number; clientY: number } | null = null
   let moveRaf = 0
   const touchSession = new AcExTouchPointSession()
+  const touchPickHudHost: AcExTouchPickHudHost = {
+    refreshSnapLoupe: (clientX, clientY) => {
+      acexRefreshMobileSnapLoupe(clientX, clientY)
+    },
+    hideSnapLoupe: () => {
+      acexHideMobileSnapLoupe()
+    },
+    refreshSimulatedCursor: (clientX, clientY) => {
+      acexRefreshSimulatedMouseCursor(root, clientX, clientY)
+    },
+    hideSimulatedCursor: () => {
+      acexHideSimulatedMouseCursor()
+    }
+  }
+  const hideTouchPreciseHud = () => {
+    acexHideMobileSnapLoupe()
+    acexHideSimulatedMouseCursor()
+  }
+  const applyTouchPreciseSample = (fingerX: number, fingerY: number) => {
+    const sample = acexTouchPickStrategy().mapFingerToSample(fingerX, fingerY)
+    previewDrawingPoint(sample.x, sample.y)
+    acexTouchPickStrategy().showPreciseHud(
+      touchPickHudHost,
+      sample.x,
+      sample.y
+    )
+  }
+  /** Idle box-select / zoom-window rubber band after a long-press or mouse down. */
+  let boxGesture: {
+    kind: 'select' | 'zoom-window'
+    pointerId: number
+    pointerType: string
+    startX: number
+    startY: number
+    activated: boolean
+  } | null = null
+  const releaseBoxPointerCapture = (pointerId: number) => {
+    try {
+      if (domElement.hasPointerCapture(pointerId)) {
+        domElement.releasePointerCapture(pointerId)
+      }
+    } catch {
+      // Pointer may already be released.
+    }
+  }
+
+  const selectionRect = document.createElement('div')
+  selectionRect.id = 'mlcad-selection-rect'
+  selectionRect.hidden = true
+  root.appendChild(selectionRect)
+
+  const hideSelectionRect = () => {
+    selectionRect.hidden = true
+  }
+
+  const updateSelectionRect = (
+    startX: number,
+    startY: number,
+    clientX: number,
+    clientY: number,
+    kind: 'select' | 'zoom-window'
+  ) => {
+    const left = Math.min(startX, clientX)
+    const top = Math.min(startY, clientY)
+    selectionRect.style.left = `${left}px`
+    selectionRect.style.top = `${top}px`
+    selectionRect.style.width = `${Math.abs(clientX - startX)}px`
+    selectionRect.style.height = `${Math.abs(clientY - startY)}px`
+    if (kind === 'select') {
+      selectionRect.dataset.mode = acexSelectionModeFromDrag(startX, clientX)
+    } else {
+      delete selectionRect.dataset.mode
+    }
+    selectionRect.hidden = false
+  }
 
   /**
    * Drops a coalesced pointer-move frame so it cannot revive OSNAP / jig
@@ -2251,7 +2394,7 @@ function setupToolPointerInput(options: AcExToolPointerInputOptions): void {
   }
 
   /**
-   * Applies the latest coalesced pointer-move sample: tool preview, loupe HUD
+   * Applies the latest coalesced pointer-move sample: tool preview, precise HUD
    * while long-pressing, or zoom-window rubber band.
    */
   const flushPointerMove = () => {
@@ -2262,22 +2405,117 @@ function setupToolPointerInput(options: AcExToolPointerInputOptions): void {
     const measure = getMeasure()
     const markup = getMarkup()
     if (measure?.isActive) {
-      measure.handlePointerMove(sample.clientX, sample.clientY)
       if (touchSession.isLoupe) {
-        refreshSnapLoupeHud(sample.clientX, sample.clientY)
+        applyTouchPreciseSample(sample.clientX, sample.clientY)
+        render()
+        return
       }
+      measure.handlePointerMove(sample.clientX, sample.clientY)
       render()
       return
     }
     if (markup?.isActive) {
-      markup.handlePointerMove(sample.clientX, sample.clientY)
       if (touchSession.isLoupe) {
-        refreshSnapLoupeHud(sample.clientX, sample.clientY)
+        applyTouchPreciseSample(sample.clientX, sample.clientY)
+        render()
+        return
       }
+      markup.handlePointerMove(sample.clientX, sample.clientY)
       render()
       return
     }
+    if (boxGesture?.activated) {
+      if (boxGesture.kind === 'zoom-window') {
+        getNavTools()?.handlePointerMove(sample.clientX, sample.clientY)
+      } else {
+        updateSelectionRect(
+          boxGesture.startX,
+          boxGesture.startY,
+          sample.clientX,
+          sample.clientY,
+          boxGesture.kind
+        )
+      }
+      return
+    }
     getNavTools()?.handlePointerMove(sample.clientX, sample.clientY)
+  }
+
+  const idleNavMode = (): 'select' | 'pan' | 'zoom-window' | null => {
+    if (isDrawingToolActive()) return null
+    return getNavTools()?.getMode() ?? null
+  }
+
+  const applyClickSelect = (clientX: number, clientY: number): boolean => {
+    const markup = getMarkup()
+    const measure = getMeasure()
+    if (markup?.handleSelectionPointerDown(clientX, clientY)) {
+      if (markup.hasSelection) measure?.clearSelection()
+      render()
+      return true
+    }
+    if (measure?.handleSelectionPointerDown(clientX, clientY)) {
+      if (measure.hasSelection) markup?.clearSelection()
+      render()
+      return true
+    }
+    return false
+  }
+
+  const applyBoxSelect = (
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number
+  ) => {
+    const a = screenToWcs(startX, startY)
+    const b = screenToWcs(endX, endY)
+    const box: AcExExtents = {
+      minX: Math.min(a.x, b.x),
+      minY: Math.min(a.y, b.y),
+      maxX: Math.max(a.x, b.x),
+      maxY: Math.max(a.y, b.y)
+    }
+    const mode = acexSelectionModeFromDrag(startX, endX)
+    getMarkup()?.handleSelectionBox(box, mode)
+    getMeasure()?.handleSelectionBox(box, mode)
+    render()
+  }
+
+  const finishBoxGesture = (
+    clientX: number,
+    clientY: number,
+    commit: boolean
+  ) => {
+    const gesture = boxGesture
+    boxGesture = null
+    hideSelectionRect()
+    acexSetMobileSnapLoupePreciseCapture(false)
+    if (gesture) releaseBoxPointerCapture(gesture.pointerId)
+    // Compat mouse after touch, not a real mouse box-select.
+    if (gesture?.pointerType === 'touch') acexSinkFollowingClick()
+    if (!gesture) return
+    if (!commit || !gesture.activated) {
+      if (gesture.kind === 'zoom-window') {
+        getNavTools()?.cancelZoomWindow()
+      }
+      return
+    }
+    const moved =
+      Math.hypot(clientX - gesture.startX, clientY - gesture.startY) >= 8
+    if (gesture.kind === 'zoom-window') {
+      if (moved) {
+        getNavTools()?.handlePointerDown(clientX, clientY)
+      } else {
+        getNavTools()?.cancelZoomWindow()
+      }
+      return
+    }
+    if (moved) {
+      applyBoxSelect(gesture.startX, gesture.startY, clientX, clientY)
+    } else {
+      applyClickSelect(clientX, clientY)
+    }
   }
 
   /**
@@ -2291,22 +2529,148 @@ function setupToolPointerInput(options: AcExToolPointerInputOptions): void {
     if (event.pointerType !== 'touch') return
     if (touchSession.phase === 'idle') return
     if (event.pointerId !== touchSession.pointerId) return
-    setPreciseCaptureActive(false)
+    if (boxGesture) {
+      const gesture = boxGesture
+      const wasActivated = gesture.activated
+      cancelPendingPointerMove()
+      if (!commit) {
+        if (!wasActivated && touchSession.isPicking) {
+          return
+        }
+        touchSession.cancel()
+        finishBoxGesture(event.clientX, event.clientY, false)
+        render()
+        return
+      }
+      const action = touchSession.end()
+      if (action === 'ignore') {
+        finishBoxGesture(event.clientX, event.clientY, false)
+        render()
+        return
+      }
+      if (!wasActivated) {
+        boxGesture = null
+        hideSelectionRect()
+        acexSetMobileSnapLoupePreciseCapture(false)
+        releaseBoxPointerCapture(gesture.pointerId)
+        acexSinkFollowingClick()
+        if (gesture.kind === 'select') {
+          applyClickSelect(event.clientX, event.clientY)
+        }
+        return
+      }
+      finishBoxGesture(event.clientX, event.clientY, true)
+      return
+    }
+    acexSetMobileSnapLoupePreciseCapture(false)
     // Loupe moves coalesce into RAF; cancel before commit/abort so a late
     // flush cannot set live pointer and bring the OSNAP glyph back.
     cancelPendingPointerMove()
+    // Chrome synthesizes mouse pointerdown+click after touchup near the finger.
+    // Without this, a two-point tool would commit the second point immediately
+    // and clear the confirmed-point plus mark.
+    acexSinkFollowingClick()
     if (!commit) {
       touchSession.cancel()
-      hideSnapLoupe()
+      hideTouchPreciseHud()
       render()
       return
     }
+    const wasPrecise = touchSession.isLoupe
     const action = touchSession.end()
-    hideSnapLoupe()
+    hideTouchPreciseHud()
     if (action === 'commit') {
-      commitDrawingPoint(event.clientX, event.clientY)
+      if (wasPrecise) {
+        const sample = acexTouchPickStrategy().mapFingerToSample(
+          event.clientX,
+          event.clientY
+        )
+        commitDrawingPoint(sample.x, sample.y)
+      } else {
+        commitDrawingPoint(event.clientX, event.clientY)
+      }
     } else {
       render()
+    }
+  }
+
+  const idlePointerHost: AcExIdlePointerHost = {
+    navMode: () => idleNavMode(),
+    shouldIgnoreCompatMouse: () => acexShouldIgnoreCompatMouse(),
+    startTouchBox: (kind, event) => {
+      // preventDefault only: do not stopImmediatePropagation so OrbitControls
+      // still receives pointerdown and can pan if the finger moves first.
+      event.preventDefault()
+      boxGesture = {
+        kind,
+        pointerId: event.pointerId,
+        pointerType: 'touch',
+        startX: event.clientX,
+        startY: event.clientY,
+        activated: false
+      }
+      touchSession.start(event.pointerId, event.clientX, event.clientY, () => {
+        if (!boxGesture || boxGesture.pointerId !== event.pointerId) return
+        boxGesture.activated = true
+        boxGesture.startX = touchSession.x
+        boxGesture.startY = touchSession.y
+        acexSetMobileSnapLoupePreciseCapture(true)
+        if (kind === 'zoom-window') {
+          getNavTools()?.handlePointerDown(touchSession.x, touchSession.y)
+        } else {
+          updateSelectionRect(
+            touchSession.x,
+            touchSession.y,
+            touchSession.x,
+            touchSession.y,
+            kind
+          )
+        }
+      })
+      domElement.setPointerCapture(event.pointerId)
+    },
+    startMouseBox: event => {
+      event.stopImmediatePropagation()
+      boxGesture = {
+        kind: 'select',
+        pointerId: event.pointerId,
+        pointerType: event.pointerType,
+        startX: event.clientX,
+        startY: event.clientY,
+        activated: true
+      }
+      try {
+        domElement.setPointerCapture(event.pointerId)
+      } catch {
+        // Capture is best-effort so the rubber band tracks off-canvas.
+      }
+      updateSelectionRect(
+        event.clientX,
+        event.clientY,
+        event.clientX,
+        event.clientY,
+        'select'
+      )
+    },
+    finishMouseBox: (event, commit) => {
+      if (!boxGesture || event.pointerId !== boxGesture.pointerId) {
+        return false
+      }
+      if (boxGesture.pointerType === 'touch') return false
+      finishBoxGesture(event.clientX, event.clientY, commit)
+      return true
+    },
+    handleNavPointerDown: event => {
+      if (getNavTools()?.handlePointerDown(event.clientX, event.clientY)) {
+        event.stopImmediatePropagation()
+        return true
+      }
+      return false
+    },
+    applyClickSelect: event => {
+      if (!applyClickSelect(event.clientX, event.clientY)) return false
+      event.stopImmediatePropagation()
+      return true
     }
   }
 
@@ -2314,19 +2678,27 @@ function setupToolPointerInput(options: AcExToolPointerInputOptions): void {
     'pointerdown',
     event => {
       if (event.button !== 0) return
+      if (event.pointerType !== 'touch' && acexShouldIgnoreCompatMouse()) {
+        event.stopImmediatePropagation()
+        return
+      }
       const measure = getMeasure()
       const markup = getMarkup()
       if (event.pointerType === 'touch' && isDrawingToolActive()) {
         // Match cad-simple-viewer: keep the OS from turning a still finger into
-        // scroll / context-menu `pointercancel` before the loupe timer fires.
+        // scroll / context-menu `pointercancel` before the precise timer fires.
         event.preventDefault()
-        touchSession.start(event.pointerId, event.clientX, event.clientY, () => {
-          // Precise capture only: lock pan and start jig / loupe preview.
-          setPreciseCaptureActive(true)
-          previewDrawingPoint(touchSession.x, touchSession.y)
-          refreshSnapLoupeHud(touchSession.x, touchSession.y)
-          render()
-        })
+        touchSession.start(
+          event.pointerId,
+          event.clientX,
+          event.clientY,
+          () => {
+            // Precise capture only: lock pan and start jig / HUD preview.
+            acexSetMobileSnapLoupePreciseCapture(true)
+            applyTouchPreciseSample(touchSession.x, touchSession.y)
+            render()
+          }
+        )
         domElement.setPointerCapture(event.pointerId)
         return
       }
@@ -2346,22 +2718,7 @@ function setupToolPointerInput(options: AcExToolPointerInputOptions): void {
         }
         return
       }
-      const nav = getNavTools()
-      if (nav?.handlePointerDown(event.clientX, event.clientY)) {
-        event.stopImmediatePropagation()
-        return
-      }
-      if (markup?.handleSelectionPointerDown(event.clientX, event.clientY)) {
-        event.stopImmediatePropagation()
-        if (markup.hasSelection) measure?.clearSelection()
-        render()
-        return
-      }
-      if (measure?.handleSelectionPointerDown(event.clientX, event.clientY)) {
-        event.stopImmediatePropagation()
-        if (measure.hasSelection) markup?.clearSelection()
-        render()
-      }
+      acexIdlePointerStrategy().onPointerDown(event, idlePointerHost)
     },
     true
   )
@@ -2372,8 +2729,24 @@ function setupToolPointerInput(options: AcExToolPointerInputOptions): void {
     if (event.pointerType === 'touch' && touchSession.phase !== 'idle') {
       if (event.pointerId !== touchSession.pointerId) return
       // Movement before the loupe aborts the pick so OrbitControls can pan.
-      touchSession.move(event.clientX, event.clientY, true)
+      const moved = touchSession.move(event.clientX, event.clientY, true)
+      if (moved === 'panning') {
+        if (boxGesture) {
+          boxGesture = null
+          hideSelectionRect()
+        }
+        return
+      }
       if (!touchSession.isLoupe) return
+    }
+    if (boxGesture && event.pointerId === boxGesture.pointerId) {
+      if (boxGesture.activated) {
+        pendingMove = { clientX: event.clientX, clientY: event.clientY }
+        if (moveRaf === 0) {
+          moveRaf = requestAnimationFrame(flushPointerMove)
+        }
+      }
+      return
     }
     if (!measure?.isActive && !markup?.isActive && !zoomWindow) return
     pendingMove = { clientX: event.clientX, clientY: event.clientY }
@@ -2382,9 +2755,13 @@ function setupToolPointerInput(options: AcExToolPointerInputOptions): void {
     }
   })
   window.addEventListener('pointerup', event => {
+    if (acexIdlePointerStrategy().onPointerUp(event, idlePointerHost)) return
     endTouchPick(event, true)
   })
   window.addEventListener('pointercancel', event => {
+    if (acexIdlePointerStrategy().onPointerCancel(event, idlePointerHost)) {
+      return
+    }
     endTouchPick(event, false)
   })
 }

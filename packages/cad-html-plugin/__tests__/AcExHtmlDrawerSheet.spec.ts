@@ -1,8 +1,9 @@
 /** @jest-environment jsdom */
 
 import {
-  acExHtmlIsCompactLayout,
-  acExHtmlIsPhoneLayout,
+  acexHtmlIsCompactLayout,
+  acexHtmlIsMobileNavUi,
+  acexHtmlIsPhoneLayout,
   setupAcExHtmlDrawerSheets
 } from '../src/AcExHtmlDrawerSheet'
 import {
@@ -30,9 +31,9 @@ describe('setupAcExHtmlDrawerSheets', () => {
 
   it('detects the phone breakpoint', () => {
     mockPhone(true)
-    expect(acExHtmlIsPhoneLayout()).toBe(true)
+    expect(acexHtmlIsPhoneLayout()).toBe(true)
     mockPhone(false)
-    expect(acExHtmlIsPhoneLayout()).toBe(false)
+    expect(acexHtmlIsPhoneLayout()).toBe(false)
   })
 
   it('detects the compact (phone or pad) breakpoint', () => {
@@ -43,7 +44,20 @@ describe('setupAcExHtmlDrawerSheets', () => {
         addEventListener: jest.fn(),
         removeEventListener: jest.fn()
       }) as unknown as MediaQueryList
-    expect(acExHtmlIsCompactLayout()).toBe(true)
+    expect(acexHtmlIsCompactLayout()).toBe(true)
+    expect(acexHtmlIsMobileNavUi()).toBe(true)
+  })
+
+  it('treats a coarse pointer as mobile nav UI', () => {
+    window.matchMedia = (query: string) =>
+      ({
+        matches: query.includes('pointer: coarse'),
+        media: query,
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn()
+      }) as unknown as MediaQueryList
+    expect(acexHtmlIsCompactLayout()).toBe(false)
+    expect(acexHtmlIsMobileNavUi()).toBe(true)
   })
 
   it('parks the drawer on the sidebar and closes strips on phone', () => {

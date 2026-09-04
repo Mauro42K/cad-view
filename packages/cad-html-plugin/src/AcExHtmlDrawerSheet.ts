@@ -4,11 +4,14 @@
  * close arrow. Results drawers live inside tool-strip wraps; opening one
  * parks the drawer on the sidebar so dismissing the strip does not hide it.
  *
- * @module AcExHtmlDrawerSheet
+ * @module acexHtmlDrawerSheet
  * @packageDocumentation
  */
 
-import { ML_UI_COMPACT_MAX_WIDTH, ML_UI_MOBILE_MAX_WIDTH } from './AcExHtmlShell'
+import {
+  ML_UI_COMPACT_MAX_WIDTH,
+  ML_UI_MOBILE_MAX_WIDTH
+} from './AcExHtmlShell'
 
 const MIN_HEIGHT = 160
 const DEFAULT_HEIGHT_VH = 0.42
@@ -25,7 +28,7 @@ export interface AcExHtmlDrawerSheetController {
 }
 
 /** Whether the offline HTML chrome is using the phone breakpoint. */
-export function acExHtmlIsPhoneLayout(): boolean {
+export function acexHtmlIsPhoneLayout(): boolean {
   return (
     typeof window !== 'undefined' &&
     window.matchMedia?.(`(max-width: ${ML_UI_MOBILE_MAX_WIDTH}px)`).matches ===
@@ -34,11 +37,25 @@ export function acExHtmlIsPhoneLayout(): boolean {
 }
 
 /** Whether the offline HTML chrome is using the phone or pad breakpoint. */
-export function acExHtmlIsCompactLayout(): boolean {
+export function acexHtmlIsCompactLayout(): boolean {
   return (
     typeof window !== 'undefined' &&
     window.matchMedia?.(`(max-width: ${ML_UI_COMPACT_MAX_WIDTH}px)`).matches ===
       true
+  )
+}
+
+/**
+ * Whether idle touch should unify pan + long-press box select (and hide
+ * Select / Pan), and whether confirmed-point plus marks should show.
+ * Compact width covers phone and pad; coarse pointer covers wider tablets
+ * such as iPad landscape.
+ */
+export function acexHtmlIsMobileNavUi(): boolean {
+  return (
+    acexHtmlIsCompactLayout() ||
+    (typeof window !== 'undefined' &&
+      window.matchMedia?.('(pointer: coarse)').matches === true)
   )
 }
 
@@ -62,7 +79,7 @@ export function setupAcExHtmlDrawerSheets(options?: {
   }
 
   const restoreIfDesktop = () => {
-    if (acExHtmlIsPhoneLayout()) return
+    if (acexHtmlIsPhoneLayout()) return
     const sidebar = document.getElementById('mlcad-sidebar')
     for (const drawer of drawers) {
       drawer.style.height = ''
@@ -97,7 +114,7 @@ export function setupAcExHtmlDrawerSheets(options?: {
       inset += wrap.offsetHeight
     })
     const session = document.getElementById('mlcad-command-session')
-    if (session && !session.hidden && acExHtmlIsPhoneLayout()) {
+    if (session && !session.hidden && acexHtmlIsPhoneLayout()) {
       // Session replaces the toolbar (which stays in layout via visibility:
       // hidden). Pin the drawer to the session height only.
       inset = session.offsetHeight
@@ -119,7 +136,7 @@ export function setupAcExHtmlDrawerSheets(options?: {
     if (sidebar && drawer.parentElement !== sidebar) {
       sidebar.appendChild(drawer)
     }
-    if (acExHtmlIsPhoneLayout()) {
+    if (acexHtmlIsPhoneLayout()) {
       options?.closeStrips?.()
       syncInset()
     }

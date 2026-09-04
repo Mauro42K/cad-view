@@ -22,9 +22,7 @@ describe('setupAcExHtmlToolbarFlyouts', () => {
     mountFixture(`
       <button type="button" id="mlcad-measure-menu-btn"></button>
       <button type="button" id="mlcad-markup-menu-btn"></button>
-      <button type="button" id="mlcad-snap-menu-btn"></button>
       <button type="button" id="mlcad-zoom-menu-btn"></button>
-      <button type="button" id="mlcad-lang-btn"></button>
       <button type="button" id="mlcad-settings-btn"></button>
       ${stripHtml('mlcad-measure-strip', '<button type="button" data-action="measure" data-measure-mode="distance"></button>')}
       ${stripHtml('mlcad-markup-strip', '<button type="button" data-action="markup" data-markup-mode="cloud"></button>')}
@@ -35,11 +33,11 @@ describe('setupAcExHtmlToolbarFlyouts', () => {
       )}
       ${stripHtml(
         'mlcad-settings-strip',
-        '<button type="button" data-action="toggle-theme"></button><button type="button" id="mlcad-settings-locale-btn" data-action="locale-menu"></button><button type="button" data-action="switch-bg"></button>'
+        '<button type="button" data-action="toggle-theme"></button><button type="button" id="mlcad-settings-snap-btn" data-action="snap-menu"></button><button type="button" id="mlcad-settings-locale-btn" data-action="locale-menu"><span class="mlcad-tool-btn-icon"><span class="mlcad-locale-option-badge">LANG</span></span></button><button type="button" data-action="switch-bg"></button>'
       )}
       ${stripHtml(
         'mlcad-locale-strip',
-        '<button type="button" data-locale="en"></button><button type="button" data-locale="zh"></button>'
+        '<button type="button" data-locale="en"><span class="mlcad-tool-btn-icon"><span class="mlcad-locale-option-badge">EN</span></span></button><button type="button" data-locale="zh"><span class="mlcad-tool-btn-icon"><span class="mlcad-locale-option-badge">中</span></span></button>'
       )}
     `)
   }
@@ -93,11 +91,11 @@ describe('setupAcExHtmlToolbarFlyouts', () => {
       false
     )
 
-    document.getElementById('mlcad-snap-menu-btn')?.click()
+    document.getElementById('mlcad-zoom-menu-btn')?.click()
     expect(document.getElementById('mlcad-measure-strip-wrap')?.hidden).toBe(
       true
     )
-    expect(document.getElementById('mlcad-snap-strip-wrap')?.hidden).toBe(false)
+    expect(document.getElementById('mlcad-zoom-strip-wrap')?.hidden).toBe(false)
   })
 
   it('notifies onOpen when a strip replaces another', () => {
@@ -118,31 +116,30 @@ describe('setupAcExHtmlToolbarFlyouts', () => {
     )
   })
 
-  it('closes a dismissible language strip on canvas click and locale select', () => {
+  it('opens snap from settings and keeps it sticky on canvas click', () => {
     mountAllStrips()
-    const onLocaleSelect = jest.fn()
-    setupAcExHtmlToolbarFlyouts({
-      onItemClick: jest.fn(),
-      onLocaleSelect,
-      getLocale: () => 'en'
-    })
-    const wrap = document.getElementById('mlcad-locale-strip-wrap')
+    const onOpen = jest.fn()
+    setupAcExHtmlToolbarFlyouts({ onItemClick: jest.fn(), onOpen })
 
-    document.getElementById('mlcad-lang-btn')?.click()
-    expect(wrap?.hidden).toBe(false)
-    expect(
-      document
-        .querySelector('[data-locale="en"]')
-        ?.classList.contains('active')
-    ).toBe(true)
+    document.getElementById('mlcad-settings-btn')?.click()
+    document.getElementById('mlcad-settings-snap-btn')?.click()
+    expect(document.getElementById('mlcad-settings-strip-wrap')?.hidden).toBe(
+      true
+    )
+    expect(document.getElementById('mlcad-snap-strip-wrap')?.hidden).toBe(false)
+    expect(onOpen).toHaveBeenCalledWith(
+      'snap',
+      document.getElementById('mlcad-snap-strip')
+    )
 
     document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
-    expect(wrap?.hidden).toBe(true)
+    expect(document.getElementById('mlcad-snap-strip-wrap')?.hidden).toBe(false)
 
-    document.getElementById('mlcad-lang-btn')?.click()
-    document.querySelector<HTMLButtonElement>('[data-locale="zh"]')?.click()
-    expect(onLocaleSelect).toHaveBeenCalledWith('zh')
-    expect(wrap?.hidden).toBe(true)
+    document.getElementById('mlcad-settings-snap-btn')?.click()
+    expect(document.getElementById('mlcad-snap-strip-wrap')?.hidden).toBe(true)
+    expect(document.getElementById('mlcad-settings-strip-wrap')?.hidden).toBe(
+      false
+    )
   })
 
   it('opens locale from settings and hides the settings strip', () => {
@@ -178,6 +175,29 @@ describe('setupAcExHtmlToolbarFlyouts', () => {
       false
     )
     expect(onStripChange).toHaveBeenCalled()
+    expect(
+      document
+        .getElementById('mlcad-settings-locale-btn')
+        ?.querySelector('.mlcad-tool-btn-icon')?.innerHTML
+    ).toBe('<span class="mlcad-locale-option-badge">EN</span>')
+  })
+
+  it('seeds the language parent with the current locale badge on setup', () => {
+    mountAllStrips()
+    setupAcExHtmlToolbarFlyouts({
+      onItemClick: jest.fn(),
+      getLocale: () => 'zh'
+    })
+    expect(
+      document
+        .getElementById('mlcad-settings-locale-btn')
+        ?.querySelector('.mlcad-tool-btn-icon')?.innerHTML
+    ).toBe('<span class="mlcad-locale-option-badge">中</span>')
+    expect(
+      document
+        .querySelector<HTMLButtonElement>('[data-locale="zh"]')
+        ?.classList.contains('active')
+    ).toBe(true)
   })
 
   it('closes a dismissible zoom strip on canvas click and tool select', () => {
