@@ -222,7 +222,11 @@ jobs:
           set -euo pipefail
           title="chore: synchronize upstream main ${UPSTREAM_SHA}"
           body="Automated upstream synchronization from mlightcad/cad-viewer. Source SHA: ${UPSTREAM_SHA}. Clean upstream health, ancestry, exact allowlist parity, and candidate validation passed. This PR is eligible for automatic merge only after all required gates pass."
-          existing="$(gh pr list --base main --head "${SYNC_BRANCH}" --state open --json number --jq '.[0].number')"
+          find_existing_pr() {
+            gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=main&per_page=100" \
+              --jq --arg branch "${SYNC_BRANCH}" '[.[] | select(.base.ref == "main" and .head.ref == $branch)] | .[0].number // empty'
+          }
+          existing="$(find_existing_pr)"
           pr_created=false
           if [ -n "$existing" ]; then
             pr_number="$existing"
@@ -247,7 +251,7 @@ jobs:
               pr_created=true
               echo "Created synchronization PR #${pr_number}."
             else
-              existing="$(gh pr list --base main --head "${SYNC_BRANCH}" --state open --json number --jq '.[0].number')"
+              existing="$(find_existing_pr)"
               if [ -z "${existing}" ]; then
                 cat "${create_error}" >&2
                 exit 1
