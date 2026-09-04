@@ -179,6 +179,7 @@ jobs:
             echo 'UPSTREAM_SYNC_TOKEN repository secret is required to publish workflow-file changes.' >&2
             exit 1
           fi
+          git config --local --unset-all http.https://github.com/.extraheader || true
           if git show-ref --verify --quiet "refs/remotes/origin/${SYNC_BRANCH}"; then
             lease="$(git rev-parse "refs/remotes/origin/${SYNC_BRANCH}")"
             git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${SYNC_PUSH_TOKEN}" | base64 -w0)" push --force-with-lease="refs/heads/${SYNC_BRANCH}:${lease}" origin "${SYNC_BRANCH}:${SYNC_BRANCH}"
