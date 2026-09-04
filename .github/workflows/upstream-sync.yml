@@ -11,6 +11,13 @@ permissions:
 env:
   SYNC_BRANCH: chore/upstream-sync
   UPSTREAM_REPOSITORY: mlightcad/cad-viewer
+  DOWNSTREAM_ALLOWLIST: |-
+    AGENTS.md
+    .github/workflows/ci.yml
+    .github/workflows/upstream-sync.yml
+    docs/DEPENDENCY_POLICY.md
+    docs/DOWNSTREAM_MAINTENANCE.md
+    vercel.json
 
 jobs:
   sync:
@@ -128,6 +135,17 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
+          actual_files="$(git diff --name-only upstream/main...HEAD | sort)"
+          if [ "${actual_files}" != "${DOWNSTREAM_ALLOWLIST}" ]; then
+            {
+              echo '## Synchronization candidate blocked'
+              echo
+              echo '- Reason: candidate diff is outside the authorized downstream allowlist.'
+              echo '### Actual files'
+              printf '%s\n' "${actual_files}"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
           if git diff --quiet origin/main HEAD; then
             echo 'changed=false' >> "$GITHUB_OUTPUT"
             exit 0
@@ -187,35 +205,77 @@ jobs:
             git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${SYNC_PUSH_TOKEN}" | base64 -w0)" push origin "${SYNC_BRANCH}:${SYNC_BRANCH}"
           fi
 
-      - name: Create synchronization PR when absent
+      - name: Create or update synchronization PR
         if: steps.reconcile.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UPSTREAM_SHA: ${{ steps.upstream_health.outputs.upstream_sha }}
         run: |
+          set -euo pipefail
+          title="chore: synchronize upstream main ${UPSTREAM_SHA}"
+          body="Automated upstream synchronization from mlightcad/cad-viewer. Source SHA: ${UPSTREAM_SHA}. Clean upstream health, ancestry, exact allowlist parity, and candidate validation passed. This PR is eligible for automatic merge only after all required gates pass."
           existing="$(gh pr list --base main --head "${GITHUB_REPOSITORY_OWNER}:${SYNC_BRANCH}" --state open --json number --jq '.[0].number')"
           if [ -n "$existing" ]; then
-            echo "Synchronization PR #${existing} already exists."
-            exit 0
+            pr_number="$existing"
+            gh pr edit "${pr_number}" --title "${title}" --body "${body}"
+            echo "Updated synchronization PR #${pr_number}."
+          else
+            response="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" \
+              -f base=main -f head="${SYNC_BRANCH}" -f title="${title}" -f body="${body}")"
+            pr_number="$(jq -r '.number' <<<"${response}")"
+            echo "Created synchronization PR #${pr_number}."
           fi
-          title="chore: synchronize upstream main ${UPSTREAM_SHA}"
-          body="Automated upstream synchronization from mlightcad/cad-viewer. Source SHA: ${UPSTREAM_SHA}. Clean upstream health and downstream candidate validation passed. Review before merging."
-          set +e
-          response="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" \
-            -f base=main \
-            -f head="${SYNC_BRANCH}" \
-            -f title="${title}" \
-            -f body="${body}" \
-            --jq '.html_url' 2>&1)"
-          status=$?
-          set -e
-          if [ "$status" -eq 0 ]; then
-            echo "$response"
-            exit 0
-          fi
-          if echo "$response" | grep -Fq 'A pull request already exists'; then
-            echo 'Synchronization PR already exists; treating duplicate creation as a normal no-op.'
-            exit 0
-          fi
-          echo "$response" >&2
-          exit "$status"
+          expected_head="$(git rev-parse HEAD)"
+          expected_base="$(git rev-parse origin/main)"
+          required_checks=("build" "Analyze (actions)" "Analyze (javascript-typescript)" "CodeQL" "Vercel Preview Comments")
+          check_conclusion() {
+            gh api "repos/${GITHUB_REPOSITORY}/commits/${expected_head}/check-runs" | jq -r --arg name "$1" '[.check_runs[] | select(.name == $name)] | sort_by(.completed_at) | last | (.conclusion // "pending")'
+          }
+          vercel_state() {
+            gh api "repos/${GITHUB_REPOSITORY}/commits/${expected_head}/status" --jq '[.statuses[] | select(.context == "Vercel")] | sort_by(.created_at) | last | (.state // "pending")'
+          }
+          for attempt in $(seq 1 30); do
+            pr_state="$(gh pr view "${pr_number}" --json state,headRefOid,baseRefOid,mergeable,mergeStateStatus)"
+            head_sha="$(jq -r '.headRefOid' <<<"${pr_state}")"
+            base_sha="$(jq -r '.baseRefOid' <<<"${pr_state}")"
+            if [ "$(jq -r '.state' <<<"${pr_state}")" != 'OPEN' ] || [ "${head_sha}" != "${expected_head}" ] || [ "${base_sha}" != "${expected_base}" ]; then
+              echo 'PR head/base/state changed unexpectedly; refusing automatic merge.' >&2
+              exit 1
+            fi
+            git fetch --prune upstream main
+            [ "$(git rev-parse upstream/main)" = "${UPSTREAM_SHA}" ] || { echo 'Upstream advanced; refusing automatic merge.' >&2; exit 1; }
+            git merge-base --is-ancestor "${UPSTREAM_SHA}" "${expected_head}"
+            actual_files="$(git diff --name-only "${UPSTREAM_SHA}"..."${expected_head}" | sort)"
+            [ "${actual_files}" = "${DOWNSTREAM_ALLOWLIST}" ] || { echo 'Candidate diff escaped the allowlist; refusing automatic merge.' >&2; exit 1; }
+            all_passed=true
+            for check in "${required_checks[@]}"; do
+              conclusion="$(check_conclusion "${check}")"
+              [ "${conclusion}" = 'success' ] || all_passed=false
+            done
+            [ "$(vercel_state)" = 'success' ] || all_passed=false
+            [ "$(jq -r '.mergeable' <<<"${pr_state}")" = 'MERGEABLE' ] || all_passed=false
+            [ "$(jq -r '.mergeStateStatus' <<<"${pr_state}")" = 'CLEAN' ] || all_passed=false
+            if [ "${all_passed}" = true ]; then
+              merged="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}/merge" -f merge_method=merge -f sha="${expected_head}" -f commit_title="${title}" --jq '.merged')"
+              [ "${merged}" = true ] || { echo 'GitHub did not merge the synchronization PR.' >&2; exit 1; }
+              merge_sha="$(gh pr view "${pr_number}" --json mergeCommit --jq '.mergeCommit.oid')"
+              gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${SYNC_BRANCH}"
+              git fetch --prune origin main
+              git merge-base --is-ancestor "${merge_sha}" origin/main
+              git merge-base --is-ancestor "${UPSTREAM_SHA}" origin/main
+              {
+                echo '## Automatic upstream synchronization merged'
+                echo
+                echo "- PR: #${pr_number}"
+                echo "- Upstream SHA: `${UPSTREAM_SHA}`"
+                echo "- Merge SHA: `${merge_sha}`"
+                echo '- Method: normal merge'
+                echo '- Branch cleanup: passed'
+                echo '- Required candidate, parity, CodeQL, and Vercel gates: passed'
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo 'Required gates did not complete within the bounded wait window; no merge performed.' >&2
+          exit 1
