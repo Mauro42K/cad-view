@@ -5,7 +5,6 @@ import {
   AcGePoint2dLike
 } from '@mlightcad/data-model'
 
-import { acedIsMobileOrPadUi } from '../../global/AcEdUiLayout'
 import { AcEdBaseView } from '../../view'
 import { AcEdOsnapPoint, AcEdOsnapResolver } from '../AcEdOsnapResolver'
 import { constrainToTracking } from '../AcEdPolarTracking'
@@ -22,8 +21,16 @@ import {
   AcEdFloatingInputValidationCallback
 } from './AcEdFloatingInputTypes'
 import { AcEdFloatingMessage } from './AcEdFloatingMessage'
+import { acedInteractionStrategy } from './AcEdInteractionStrategy'
 import { AcEdRubberBand } from './AcEdRubberBand'
-import { AcEdSnapLoupe } from './AcEdSnapLoupe'
+import {
+  acedHideSimulatedMouseCursor,
+  acedRefreshSimulatedMouseCursor
+} from './AcEdSimulatedMouseCursor'
+import {
+  type AcEdTouchPickHudHost,
+  acedTouchPickStrategy
+} from './AcEdTouchPickStrategy'
 import {
   acedArmTouchMouseGuard,
   acedIsGhostClientOrigin,
@@ -105,8 +112,6 @@ export class AcEdFloatingInput<T> extends AcEdFloatingMessage {
   private boundOnContextMenu: (e: MouseEvent) => void
   /** Long-press / short-tap state for one-finger point picking. */
   private readonly touchSession = new AcEdTouchPointSession()
-  /** Magnifier HUD shown after a long-press on touch. */
-  private snapLoupe?: AcEdSnapLoupe
   /**
    * When true, a left-button mouse/pen `pointerdown` landed on this prompt's
    * canvas, so the following `click` may commit. Touch never sets this:
@@ -224,7 +229,6 @@ export class AcEdFloatingInput<T> extends AcEdFloatingMessage {
       passive: false
     })
     window.addEventListener('touchend', this.boundOnTouchEnd)
-    this.snapLoupe = new AcEdSnapLoupe(view)
 
     // -----------------------------
     // Dynamic input settings listener
@@ -324,9 +328,8 @@ export class AcEdFloatingInput<T> extends AcEdFloatingMessage {
     window.removeEventListener('touchend', this.boundOnTouchEnd)
     this.releaseTouchCapture()
     this.touchSession.cancel()
-    this.snapLoupe?.dispose()
+    this.hideTouchPreciseHud()
     this.view.setNavigationEnabled(true)
-    this.view.setSnapLoupe(null)
     AcDbSysVarManager.instance().events.sysVarChanged.removeEventListener(
       this.boundOnInputSysVarChanged
     )
@@ -398,6 +401,11 @@ export class AcEdFloatingInput<T> extends AcEdFloatingMessage {
   /**
    * Starts a one-finger pick on touch, or arms a mouse/pen click commit.
    *
+   * Pointer type, not layout: a pad with a mouse still clicks; a desktop
+   * with a touch screen still long-presses. Session chrome / marks are
+   * {@link acedInteractionStrategy} point policy. Loupe vs simulated mouse
+   * is {@link acedTouchPickStrategy}.
+   *
    * @param e - Pointer event; button 0 only. Touch is handled here; mouse and
    *   pen arm {@link mouseClickArmed} so the following `click` can commit.
    */
@@ -419,15 +427,15 @@ export class AcEdFloatingInput<T> extends AcEdFloatingMessage {
     e.preventDefault()
     this.mouseClickArmed = false
     acedArmTouchMouseGuard()
-    // A leftover loupe from a previous pointercancel must not stay on screen
-    // when a new finger-down starts.
-    this.snapLoupe?.hide()
+    // A leftover precise HUD from a previous pointercancel must not stay on
+    // screen when a new finger-down starts.
+    this.hideTouchPreciseHud()
     this.touchSession.start(e.pointerId, e.clientX, e.clientY, () => {
-      // Precise capture only: disable pan and start the jig / loupe.
+      // Precise capture only: disable pan and start the jig / HUD.
       // Before the long-press, one-finger drag is navigation — no rubber-band.
       this.view.setNavigationEnabled(false)
-      this.applyClientSample(this.touchSession.x, this.touchSession.y)
-      this.refreshLoupe()
+      this.applyTouchPreciseSample(this.touchSession.x, this.touchSession.y)
+      this.refreshTouchPreciseHud()
     })
     this.parent.setPointerCapture(e.pointerId)
   }
@@ -435,7 +443,7 @@ export class AcEdFloatingInput<T> extends AcEdFloatingMessage {
   /**
    * Updates the pick preview while the finger is down. Movement past the
    * cancel threshold before the long-press fires is treated as a pan.
-   * Jig / rubber-band updates wait until the loupe (precise capture) opens.
+   * Jig / rubber-band updates wait until precise capture opens.
    *
    * @param e - Pointer event for the active touch session.
    */
@@ -445,8 +453,8 @@ export class AcEdFloatingInput<T> extends AcEdFloatingMessage {
     const moved = this.touchSession.move(e.clientX, e.clientY, true)
     if (moved === 'panning') return
     if (!this.visible || !this.touchSession.isLoupe) return
-    this.applyClientSample(e.clientX, e.clientY)
-    this.refreshLoupe()
+    this.applyTouchPreciseSample(e.clientX, e.clientY)
+    this.refreshTouchPreciseHud()
   }
 
   /**
@@ -478,7 +486,7 @@ export class AcEdFloatingInput<T> extends AcEdFloatingMessage {
     if (this.touchSession.isPicking) return
     this.touchSession.cancel()
     this.view.setNavigationEnabled(true)
-    this.snapLoupe?.hide()
+    this.hideTouchPreciseHud()
     this.view.clearCursorPos()
   }
 
@@ -509,8 +517,8 @@ export class AcEdFloatingInput<T> extends AcEdFloatingMessage {
     if (!this.touchSession.isLoupe) return
     e.preventDefault()
     if (!this.visible) return
-    this.applyClientSample(touch.clientX, touch.clientY)
-    this.refreshLoupe()
+    this.applyTouchPreciseSample(touch.clientX, touch.clientY)
+    this.refreshTouchPreciseHud()
   }
 
   /**
@@ -534,7 +542,12 @@ export class AcEdFloatingInput<T> extends AcEdFloatingMessage {
    */
   private handleContextMenu(e: MouseEvent) {
     if (!this.visible) return
-    if (!acedIsTouchLongPressContextMenu(e) && !acedIsMobileOrPadUi()) return
+    if (
+      !acedIsTouchLongPressContextMenu(e) &&
+      !acedInteractionStrategy().point.swallowsPromptContextMenu
+    ) {
+      return
+    }
     e.preventDefault()
     e.stopImmediatePropagation()
   }
@@ -550,13 +563,18 @@ export class AcEdFloatingInput<T> extends AcEdFloatingMessage {
     this.mouseClickArmed = false
     acedSinkFollowingClick()
     this.releaseTouchCapture()
+    const wasPrecise = this.touchSession.isLoupe
     const action = this.touchSession.end()
     this.view.setNavigationEnabled(true)
-    this.snapLoupe?.hide()
+    this.hideTouchPreciseHud()
     // Finger-up coords must not seed the next prompt's jig preview.
     this.view.clearCursorPos()
     if (!this.visible || action !== 'commit') return
-    this.applyClientSample(clientX, clientY)
+    if (wasPrecise) {
+      this.applyTouchPreciseSample(clientX, clientY)
+    } else {
+      this.applyClientSample(clientX, clientY)
+    }
     const wcsPos = this.lastDynamicPoint
       ? new AcGePoint2d(this.lastDynamicPoint.x, this.lastDynamicPoint.y)
       : this.getPosition({ x: clientX, y: clientY })
@@ -591,26 +609,55 @@ export class AcEdFloatingInput<T> extends AcEdFloatingMessage {
   }
 
   /**
-   * Positions the snap-loupe HUD and overlay viewport around the current
-   * touch sample, including an OSNAP glyph when a snap is active.
+   * Applies the active {@link acedTouchPickStrategy} finger→sample mapping
+   * during precise capture (loupe or simulated mouse).
+   *
+   * @param fingerX - Finger X in client CSS pixels.
+   * @param fingerY - Finger Y in client CSS pixels.
    */
-  private refreshLoupe() {
-    if (!this.snapLoupe) return
-    const canvas = this.view.viewportToCanvas({
-      x: this.touchSession.x,
-      y: this.touchSession.y
-    })
-    if (this.lastOsnapPoint) {
-      const snapScreen = this.view.worldToScreen(this.lastOsnapPoint)
-      this.snapLoupe.show(
-        canvas.x,
-        canvas.y,
-        { x: snapScreen.x, y: snapScreen.y },
-        AcEdOsnapResolver.osnapModeToMarkerType(this.lastOsnapPoint.type)
-      )
-    } else {
-      this.snapLoupe.show(canvas.x, canvas.y)
+  private applyTouchPreciseSample(fingerX: number, fingerY: number) {
+    const sample = acedTouchPickStrategy().mapFingerToSample(fingerX, fingerY)
+    this.applyClientSample(sample.x, sample.y)
+  }
+
+  /** HUD host wiring loupe / simulated-mouse helpers to this view. */
+  private readonly touchPickHudHost: AcEdTouchPickHudHost = {
+    refreshSnapLoupe: (clientX, clientY, snap) => {
+      this.view.refreshMobileSnapLoupe(clientX, clientY, snap)
+    },
+    hideSnapLoupe: () => {
+      this.view.hideMobileSnapLoupe()
+    },
+    refreshSimulatedCursor: (clientX, clientY) => {
+      acedRefreshSimulatedMouseCursor(this.view, clientX, clientY)
+    },
+    hideSimulatedCursor: () => {
+      acedHideSimulatedMouseCursor(this.view)
     }
+  }
+
+  /**
+   * Positions the active touch-pick HUD (loupe or simulated mouse) around the
+   * mapped pick sample, including an OSNAP glyph when a snap is active.
+   */
+  private refreshTouchPreciseHud() {
+    const strategy = acedTouchPickStrategy()
+    const sample = strategy.mapFingerToSample(
+      this.touchSession.x,
+      this.touchSession.y
+    )
+    strategy.showPreciseHud(
+      this.touchPickHudHost,
+      sample.x,
+      sample.y,
+      this.lastOsnapPoint ?? null
+    )
+  }
+
+  /** Hides both touch precise HUDs (safe if the setting toggled mid-gesture). */
+  private hideTouchPreciseHud() {
+    this.view.hideMobileSnapLoupe()
+    acedHideSimulatedMouseCursor(this.view)
   }
 
   /**

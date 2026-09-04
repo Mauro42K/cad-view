@@ -1,12 +1,12 @@
 import { AcApI18n } from '../../../i18n/AcApI18n'
 import {
-  acedIsMobileOrPadUi,
   acedIsMobileUiLayout,
   acedSubscribeUiLayout,
   ML_UI_MOBILE_MAX_WIDTH,
   ML_UI_SESSION_PANEL_MAX_WIDTH,
   ML_UI_SESSION_PANEL_WIDTH
 } from '../../global/AcEdUiLayout'
+import { acedInteractionStrategy } from './AcEdInteractionStrategy'
 import type { AcEdMobileSessionMetrics } from './AcEdMobileSessionMetrics'
 
 /** Keyword chip shown on the mobile session panel. */
@@ -274,7 +274,7 @@ export class AcEdMobileCommandChrome {
     state: AcEdMobileCommandChromeState,
     callbacks: AcEdMobileCommandChromeCallbacks
   ): void {
-    if (!acedIsMobileOrPadUi()) {
+    if (!acedInteractionStrategy().point.usesSessionChrome) {
       this.hide()
       return
     }
@@ -570,11 +570,12 @@ const MOBILE_CMD_CSS = `
     min-height: 32px;
     padding: 8px 12px;
     border-radius: 6px;
-    background: var(--ml-ui-bg, rgba(32, 34, 38, 0.94));
-    color: var(--ml-ui-text, #e8eaed);
-    border: 1px solid var(--ml-ui-border, rgba(255, 255, 255, 0.12));
+    background: var(--mlcad-accent, #08e8de);
+    color: #0b1f1e;
+    border: 1px solid rgba(0, 0, 0, 0.12);
     box-shadow: var(--ml-ui-shadow, 0 2px 12px rgba(0, 0, 0, 0.35));
     font-size: 13px;
+    font-weight: 600;
     line-height: 1.35;
     pointer-events: none;
   }
