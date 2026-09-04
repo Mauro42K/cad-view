@@ -226,7 +226,8 @@ jobs:
           pr_created=false
           if [ -n "$existing" ]; then
             pr_number="$existing"
-            gh pr edit "${pr_number}" --title "${title}" --body "${body}"
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" \
+              -f title="${title}" -f body="${body}" >/dev/null
             echo "Updated synchronization PR #${pr_number}."
           else
             response="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" \
