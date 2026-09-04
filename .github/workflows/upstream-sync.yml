@@ -224,7 +224,7 @@ jobs:
           body="Automated upstream synchronization from mlightcad/cad-viewer. Source SHA: ${UPSTREAM_SHA}. Clean upstream health, ancestry, exact allowlist parity, and candidate validation passed. This PR is eligible for automatic merge only after all required gates pass."
           find_existing_pr() {
             gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=main&per_page=100" \
-              --jq --arg branch "${SYNC_BRANCH}" '[.[] | select(.base.ref == "main" and .head.ref == $branch)] | .[0].number // empty'
+              | jq -r --arg branch "${SYNC_BRANCH}" '[.[] | select(.base.ref == "main" and .head.ref == $branch)] | .[0].number // empty'
           }
           existing="$(find_existing_pr)"
           pr_created=false
