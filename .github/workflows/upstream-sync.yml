@@ -230,11 +230,21 @@ jobs:
               -f title="${title}" -f body="${body}" >/dev/null
             echo "Updated synchronization PR #${pr_number}."
           else
-            response="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" \
-              -f base=main -f head="${SYNC_BRANCH}" -f title="${title}" -f body="${body}")"
-            pr_number="$(jq -r '.number' <<<"${response}")"
-            pr_created=true
-            echo "Created synchronization PR #${pr_number}."
+            create_error="${RUNNER_TEMP}/sync-pr-create-error.txt"
+            if response="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" \
+              -f base=main -f head="${SYNC_BRANCH}" -f title="${title}" -f body="${body}" 2>"${create_error}")"; then
+              pr_number="$(jq -r '.number' <<<"${response}")"
+              pr_created=true
+              echo "Created synchronization PR #${pr_number}."
+            else
+              existing="$(gh pr list --base main --head "${GITHUB_REPOSITORY_OWNER}:${SYNC_BRANCH}" --state open --json number --jq '.[0].number')"
+              if [ -z "${existing}" ]; then
+                cat "${create_error}" >&2
+                exit 1
+              fi
+              pr_number="${existing}"
+              echo "Synchronization PR #${pr_number} appeared during creation; reusing it."
+            fi
           fi
           expected_head="$(git rev-parse HEAD)"
           expected_base="$(git rev-parse origin/main)"
