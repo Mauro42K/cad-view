@@ -15,9 +15,6 @@ permissions:
 env:
   SYNC_BRANCH: chore/upstream-sync
   UPSTREAM_REPOSITORY: mlightcad/cad-viewer
-  VERCEL_PROJECT_ID: prj_rTscpKmChu5EXZKBXcCh6mzC01Q2
-  VERCEL_TEAM_ID: team_59ltVAfw1BgF3dX6dn1pT2OF
-  VERCEL_TEAM_SLUG: mauricios-projects-e89a04cd
   DOWNSTREAM_ALLOWLIST: |-
     .github/workflows/ci.yml
     .github/workflows/upstream-sync.yml
@@ -217,160 +214,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UPSTREAM_SHA: ${{ steps.upstream_health.outputs.upstream_sha }}
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
           title="chore: synchronize upstream main ${UPSTREAM_SHA}"
-          body="Automated upstream synchronization from mlightcad/cad-viewer. Source SHA: ${UPSTREAM_SHA}. Clean upstream health, ancestry, exact allowlist parity, and candidate validation passed. This PR is eligible for automatic merge only after all required gates pass."
-          find_existing_pr() {
-            gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=main&per_page=100" \
-              | jq -r --arg branch "${SYNC_BRANCH}" '[.[] | select(.base.ref == "main" and .head.ref == $branch)] | .[0].number // empty'
-          }
-          existing="$(find_existing_pr)"
-          pr_mutated=false
-          if [ -n "$existing" ]; then
-            pr_number="$existing"
-            pr_mutated=true
-            for edit_attempt in $(seq 1 6); do
-              if gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" \
-                -f title="${title}" -f body="${body}" >/dev/null; then
-                break
-              fi
-              if [ "${edit_attempt}" -eq 6 ]; then
-                echo 'Unable to update the existing synchronization PR after bounded retries.' >&2
-                exit 1
-              fi
-              echo "GitHub is still processing the synchronization PR update; retrying (${edit_attempt}/5)."
-              sleep 5
-            done
-            echo "Updated synchronization PR #${pr_number}."
+          body="Automated upstream synchronization from mlightcad/cad-viewer. Source SHA: ${UPSTREAM_SHA}. Clean upstream health, ancestry, exact allowlist parity, and candidate validation passed."
+          existing="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=main&per_page=100" | jq -r --arg branch "${SYNC_BRANCH}" '[.[] | select(.base.ref == "main" and .head.ref == $branch)] | .[0].number // empty')"
+          if [ -n "${existing}" ]; then
+            pr_number="${existing}"
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" -f title="${title}" -f body="${body}" >/dev/null
           else
-            create_error="${RUNNER_TEMP}/sync-pr-create-error.txt"
-            if response="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" \
-              -f base=main -f head="${SYNC_BRANCH}" -f title="${title}" -f body="${body}" 2>"${create_error}")"; then
-              pr_number="$(jq -r '.number' <<<"${response}")"
-              pr_mutated=true
-              echo "Created synchronization PR #${pr_number}."
-            else
-              existing="$(find_existing_pr)"
-              if [ -z "${existing}" ]; then
-                cat "${create_error}" >&2
-                exit 1
-              fi
-              pr_number="${existing}"
-              echo "Synchronization PR #${pr_number} appeared during creation; reusing it."
-            fi
+            response="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" \
+              -f base=main -f head="${SYNC_BRANCH}" -f title="${title}" -f body="${body}")"
+            pr_number="$(jq -r '.number' <<<"${response}")"
           fi
-          expected_head="$(git rev-parse HEAD)"
-          expected_base="$(git rev-parse origin/main)"
-          required_checks=("build" "Analyze (actions)" "Analyze (javascript-typescript)" "CodeQL" "Vercel Preview Comments")
-          check_conclusion() {
-            gh api "repos/${GITHUB_REPOSITORY}/commits/${expected_head}/check-runs" | jq -r --arg name "$1" '[.check_runs[] | select(.name == $name)] | sort_by(.completed_at) | last | (.conclusion // "pending")'
-          }
-          vercel_state() {
-            gh api "repos/${GITHUB_REPOSITORY}/commits/${expected_head}/status" --jq '[.statuses[] | select(.context == "Vercel")] | sort_by(.created_at) | last | (.state // "pending")'
-          }
-          for attempt in $(seq 1 30); do
-            pr_state="$(gh pr view "${pr_number}" --json state,headRefOid,baseRefOid,mergeable,mergeStateStatus)"
-            head_sha="$(jq -r '.headRefOid' <<<"${pr_state}")"
-            base_sha="$(jq -r '.baseRefOid' <<<"${pr_state}")"
-            if [ "$(jq -r '.state' <<<"${pr_state}")" != 'OPEN' ] || [ "${head_sha}" != "${expected_head}" ] || [ "${base_sha}" != "${expected_base}" ]; then
-              if [ "${pr_mutated}" = true ] && [ "${attempt}" -lt 7 ]; then
-                echo "GitHub is still materializing the new PR; retrying (${attempt}/6)."
-                sleep 5
-                continue
-              fi
-              echo 'PR head/base/state changed unexpectedly; refusing automatic merge.' >&2
-              exit 1
-            fi
-            git fetch --prune upstream main
-            [ "$(git rev-parse upstream/main)" = "${UPSTREAM_SHA}" ] || { echo 'Upstream advanced; refusing automatic merge.' >&2; exit 1; }
-            git merge-base --is-ancestor "${UPSTREAM_SHA}" "${expected_head}"
-            actual_files="$(git diff --name-only "${UPSTREAM_SHA}" "${expected_head}" | sort)"
-            [ "${actual_files}" = "${DOWNSTREAM_ALLOWLIST}" ] || { echo 'Candidate diff escaped the allowlist; refusing automatic merge.' >&2; exit 1; }
-            all_passed=true
-            for check in "${required_checks[@]}"; do
-              conclusion="$(check_conclusion "${check}")"
-              [ "${conclusion}" = 'success' ] || all_passed=false
-            done
-            [ "$(vercel_state)" = 'success' ] || all_passed=false
-            [ "$(jq -r '.mergeable' <<<"${pr_state}")" = 'MERGEABLE' ] || all_passed=false
-            [ "$(jq -r '.mergeStateStatus' <<<"${pr_state}")" = 'CLEAN' ] || all_passed=false
-            if [ "${all_passed}" = true ]; then
-              merged="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}/merge" -f merge_method=merge -f sha="${expected_head}" -f commit_title="${title}" --jq '.merged')"
-              [ "${merged}" = true ] || { echo 'GitHub did not merge the synchronization PR.' >&2; exit 1; }
-              merge_sha="$(gh pr view "${pr_number}" --json mergeCommit --jq '.mergeCommit.oid')"
-              gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${SYNC_BRANCH}"
-              git fetch --prune origin main
-              git merge-base --is-ancestor "${merge_sha}" origin/main
-              git merge-base --is-ancestor "${UPSTREAM_SHA}" origin/main
-              if [ -z "${VERCEL_TOKEN}" ]; then
-                echo 'VERCEL_TOKEN repository secret is required for post-merge Production verification.' >&2
-                exit 1
-              fi
-              production_id=''
-              retry_used=false
-              for production_attempt in $(seq 1 30); do
-                deployments="$(curl --fail --silent --show-error --retry 2 \
-                  -H "Authorization: Bearer ${VERCEL_TOKEN}" \
-                  "https://api.vercel.com/v13/deployments?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_TEAM_ID}&limit=50")"
-                production_id="$(jq -r --arg sha "${merge_sha}" '[.deployments[] | select(.target == "production" and .meta.githubCommitSha == $sha)] | sort_by(.created) | last | (.id // "")' <<<"${deployments}")"
-                if [ -z "${production_id}" ]; then
-                  sleep 20
-                  continue
-                fi
-                production="$(curl --fail --silent --show-error --retry 2 \
-                  -H "Authorization: Bearer ${VERCEL_TOKEN}" \
-                  "https://api.vercel.com/v13/deployments/${production_id}?teamId=${VERCEL_TEAM_ID}")"
-                production_state="$(jq -r '.readyState // .state // "UNKNOWN"' <<<"${production}")"
-                if [ "${production_state}" = 'READY' ]; then
-                  break
-                fi
-                if [ "${production_state}" = 'ERROR' ]; then
-                  detail_file="${RUNNER_TEMP}/vercel-production-detail.json"
-                  log_file="${RUNNER_TEMP}/vercel-production-events.log"
-                  printf '%s' "${production}" > "${detail_file}"
-                  curl --fail --silent --show-error --retry 2 \
-                    -H "Authorization: Bearer ${VERCEL_TOKEN}" \
-                    "https://api.vercel.com/v3/deployments/${production_id}/events?teamId=${VERCEL_TEAM_ID}&limit=200" > "${log_file}" || true
-                  if [ "${retry_used}" = false ] \
-                    && jq -e '.errorCode == "package_not_found"' "${detail_file}" >/dev/null \
-                    && grep -Fq '@vue/language-core' "${log_file}" \
-                    && grep -Fq 'unplugin-dts' "${log_file}"; then
-                    retry_used=true
-                    git switch --detach origin/main
-                    npx --yes vercel@54.21.1 deploy --prod --force --yes \
-                      --project "${VERCEL_PROJECT_ID}" --scope "${VERCEL_TEAM_SLUG}" \
-                      --token "${VERCEL_TOKEN}" --meta "githubCommitSha=${merge_sha}" >/dev/null
-                    production_id=''
-                    continue
-                  fi
-                  echo 'Production failed with a non-retriable error or the single clean retry already ran.' >&2
-                  exit 1
-                fi
-                sleep 20
-              done
-              final_production="$(curl --fail --silent --show-error --retry 2 \
-                -H "Authorization: Bearer ${VERCEL_TOKEN}" \
-                "https://api.vercel.com/v13/deployments/${production_id}?teamId=${VERCEL_TEAM_ID}")"
-              if [ "$(jq -r '.readyState // .state // "UNKNOWN"' <<<"${final_production}")" != 'READY' ]; then
-                echo 'Production did not reach READY for the exact merged main SHA within the timeout.' >&2
-                exit 1
-              fi
-              {
-                echo '## Automatic upstream synchronization merged'
-                echo
-                echo "- PR: #${pr_number}"
-                echo "- Upstream SHA: `${UPSTREAM_SHA}`"
-                echo "- Merge SHA: `${merge_sha}`"
-                echo '- Method: normal merge'
-                echo '- Branch cleanup: passed'
-                echo '- Required candidate, parity, CodeQL, and Vercel gates: passed'
-                echo "- Production deployment: \`${production_id}\` READY"
-              } >> "$GITHUB_STEP_SUMMARY"
-              exit 0
-            fi
-            sleep 20
-          done
-          echo 'Required gates did not complete within the bounded wait window; no merge performed.' >&2
-          exit 1
+          gh pr merge "${pr_number}" --auto --merge --delete-branch
