@@ -135,6 +135,10 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
+          if git diff --quiet origin/main HEAD; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           actual_files="$(git diff --name-only upstream/main...HEAD | sort)"
           if [ "${actual_files}" != "${DOWNSTREAM_ALLOWLIST}" ]; then
             {
@@ -145,10 +149,6 @@ jobs:
               printf '%s\n' "${actual_files}"
             } >> "$GITHUB_STEP_SUMMARY"
             exit 1
-          fi
-          if git diff --quiet origin/main HEAD; then
-            echo 'changed=false' >> "$GITHUB_OUTPUT"
-            exit 0
           fi
           echo 'changed=true' >> "$GITHUB_OUTPUT"
           git diff --check
