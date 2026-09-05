@@ -227,4 +227,14 @@ jobs:
               -f base=main -f head="${SYNC_BRANCH}" -f title="${title}" -f body="${body}")"
             pr_number="$(jq -r '.number' <<<"${response}")"
           fi
+          for attempt in $(seq 1 12); do
+            if gh pr view "${pr_number}" --json number,state >/dev/null 2>&1; then
+              break
+            fi
+            if [ "${attempt}" -eq 12 ]; then
+              echo "GitHub did not make PR #${pr_number} resolvable within the bounded wait." >&2
+              exit 1
+            fi
+            sleep 5
+          done
           gh pr merge "${pr_number}" --auto --merge --delete-branch
