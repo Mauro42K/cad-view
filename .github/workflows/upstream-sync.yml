@@ -212,7 +212,7 @@ jobs:
       - name: Create or update synchronization PR
         if: steps.reconcile.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
           UPSTREAM_SHA: ${{ steps.upstream_health.outputs.upstream_sha }}
         run: |
           set -euo pipefail
