@@ -22,7 +22,11 @@ export default {
     x: 'X',
     y: 'Y',
     confirm: 'تأكيد',
-    cancel: 'إلغاء'
+    cancel: 'إلغاء',
+    help: 'مساعدة',
+    back: 'رجوع',
+    collapse: 'طي',
+    expand: 'توسيع'
   },
   inputManager: {
     firstCorner: 'حدد الركن الأول أو',
@@ -88,6 +92,30 @@ export default {
   drawStyle: {
     color: 'اللون',
     fontSize: 'ارتفاع النص'
+  },
+  shortCutToolbar: {
+    more: 'المزيد',
+    undo: 'تراجع',
+    redo: 'إعادة',
+    erase: 'حذف'
+  },
+  textHeight: {
+    title: 'ارتفاع النص',
+    close: 'إغلاق',
+    ok: 'موافق',
+    cancel: 'إلغاء',
+    adaptive: 'ملاءمة الشاشة',
+    custom: 'ارتفاع نص مخصص',
+    customPlaceholder: 'ارتفاع العالم',
+    fromScreen: 'من حجم الشاشة',
+    fromScreenHint:
+      'أدخل حجم النص المطلوب على الشاشة عند التكبير الحالي. يُحوَّل إلى ارتفاع ثابت في إحداثيات الرسم ويبقى كما هو عند تغيير التكبير لاحقًا.',
+    screenPxPlaceholder: 'حجم الخط',
+    screenUnit: 'px',
+    convert: 'تحويل'
+  },
+  entityPick: {
+    cancel: 'إلغاء التحديد'
   },
   colorPicker: {
     title: 'تحديد اللون',

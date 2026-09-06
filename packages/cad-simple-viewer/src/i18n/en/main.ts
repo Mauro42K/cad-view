@@ -22,7 +22,11 @@ export default {
     x: 'X',
     y: 'Y',
     confirm: 'Confirm',
-    cancel: 'Cancel'
+    cancel: 'Cancel',
+    help: 'Help',
+    back: 'Back',
+    collapse: 'Collapse',
+    expand: 'Expand'
   },
   inputManager: {
     firstCorner: 'Specify the first corner or',
@@ -88,6 +92,30 @@ export default {
   drawStyle: {
     color: 'Color',
     fontSize: 'Text height'
+  },
+  shortCutToolbar: {
+    more: 'More',
+    undo: 'Undo',
+    redo: 'Redo',
+    erase: 'Delete'
+  },
+  textHeight: {
+    title: 'Text Height',
+    close: 'Close',
+    ok: 'OK',
+    cancel: 'Cancel',
+    adaptive: 'Fit to screen',
+    custom: 'Custom text height',
+    customPlaceholder: 'World height',
+    fromScreen: 'From screen size',
+    fromScreenHint:
+      'Enter how large the text should look on screen at the current zoom. It is converted to a fixed world-space height that stays constant when you zoom later.',
+    screenPxPlaceholder: 'Font size',
+    screenUnit: 'px',
+    convert: 'Convert'
+  },
+  entityPick: {
+    cancel: 'Cancel selection'
   },
   colorPicker: {
     title: 'Select Color',

@@ -92,6 +92,23 @@ export type AcExHtmlMessageKey =
   | 'drawStyle.rgb'
   | 'drawStyle.input'
   | 'drawStyle.inputPlaceholder'
+  | 'shortCutToolbar.more'
+  | 'shortCutToolbar.undo'
+  | 'shortCutToolbar.redo'
+  | 'shortCutToolbar.erase'
+  | 'textHeight.title'
+  | 'textHeight.close'
+  | 'textHeight.ok'
+  | 'textHeight.cancel'
+  | 'textHeight.adaptive'
+  | 'textHeight.custom'
+  | 'textHeight.customPlaceholder'
+  | 'textHeight.fromScreen'
+  | 'textHeight.fromScreenHint'
+  | 'textHeight.screenPxPlaceholder'
+  | 'textHeight.screenUnit'
+  | 'textHeight.convert'
+  | 'entityPick.cancel'
   | 'layers.title'
   | 'layers.close'
   | 'layers.showAll'
@@ -136,6 +153,10 @@ export type AcExHtmlMessageKey =
   | 'session.y'
   | 'session.confirm'
   | 'session.cancel'
+  | 'session.help'
+  | 'session.back'
+  | 'session.collapse'
+  | 'session.expand'
   | 'session.undo'
   | 'touchPointTutorial.title'
   | 'touchPointTutorial.description'
@@ -186,6 +207,9 @@ export type AcExHtmlMessageKey =
   | 'status.zoomLayer'
   | 'status.loadFailed'
   | 'status.noLayout'
+  | 'status.loadingChunks'
+  | 'status.loadingOsnap'
+  | 'status.buildingOsnap'
   | 'access.title'
   | 'access.passwordPrompt'
   | 'access.passwordPlaceholder'
@@ -280,6 +304,30 @@ const BASE_MESSAGES: Record<Exclude<AcExHtmlLocale, 'ar'>, AcExMessageTree> = {
       input: 'Color',
       inputPlaceholder: '1-255 or #RRGGBB'
     },
+    shortCutToolbar: {
+      more: 'More',
+      undo: 'Undo',
+      redo: 'Redo',
+      erase: 'Delete'
+    },
+    textHeight: {
+      title: 'Text Height',
+      close: 'Close',
+      ok: 'OK',
+      cancel: 'Cancel',
+      adaptive: 'Fit to screen',
+      custom: 'Custom text height',
+      customPlaceholder: 'World height',
+      fromScreen: 'From screen size',
+      fromScreenHint:
+        'Enter how large the text should look on screen at the current zoom. It is converted to a fixed world-space height that stays constant when you zoom later.',
+      screenPxPlaceholder: 'Font size',
+      screenUnit: 'px',
+      convert: 'Convert'
+    },
+    entityPick: {
+      cancel: 'Cancel selection'
+    },
     layers: {
       title: 'Layers',
       close: 'Close layers',
@@ -333,6 +381,10 @@ const BASE_MESSAGES: Record<Exclude<AcExHtmlLocale, 'ar'>, AcExMessageTree> = {
       y: 'Y',
       confirm: 'Confirm',
       cancel: 'Cancel',
+      help: 'Help',
+      back: 'Back',
+      collapse: 'Collapse',
+      expand: 'Expand',
       undo: 'Undo'
     },
     touchPointTutorial: {
@@ -398,7 +450,10 @@ const BASE_MESSAGES: Record<Exclude<AcExHtmlLocale, 'ar'>, AcExMessageTree> = {
       areaTotal: 'Area total: {value}',
       zoomLayer: 'Zoom: {name}',
       loadFailed: 'Failed to load drawing: {error}',
-      noLayout: 'No layout data in snapshot.'
+      noLayout: 'No layout data in snapshot.',
+      loadingChunks: 'Loading geometry… {loaded}/{total}',
+      loadingOsnap: 'Loading object snap… {loaded}/{total}',
+      buildingOsnap: 'Building object snap index…'
     },
     access: {
       title: 'Protected drawing',
@@ -488,6 +543,30 @@ const BASE_MESSAGES: Record<Exclude<AcExHtmlLocale, 'ar'>, AcExMessageTree> = {
       input: '颜色',
       inputPlaceholder: '1-255 或 #RRGGBB'
     },
+    shortCutToolbar: {
+      more: '更多',
+      undo: '撤销',
+      redo: '重做',
+      erase: '删除'
+    },
+    textHeight: {
+      title: '字高设置',
+      close: '关闭',
+      ok: '确定',
+      cancel: '取消',
+      adaptive: '自适应屏幕',
+      custom: '自定义字高',
+      customPlaceholder: '世界坐标字高',
+      fromScreen: '按屏幕字号换算',
+      fromScreenHint:
+        '按当前视图缩放，输入希望看到的屏幕字号（像素），换算为固定的世界坐标字高；之后缩放时字的世界高度不变。',
+      screenPxPlaceholder: '屏幕字号',
+      screenUnit: 'px',
+      convert: '换算'
+    },
+    entityPick: {
+      cancel: '取消选择'
+    },
     layers: {
       title: '图层',
       close: '关闭图层',
@@ -541,6 +620,10 @@ const BASE_MESSAGES: Record<Exclude<AcExHtmlLocale, 'ar'>, AcExMessageTree> = {
       y: 'Y',
       confirm: '确定',
       cancel: '取消',
+      help: '帮助',
+      back: '返回',
+      collapse: '收起',
+      expand: '展开',
       undo: '撤销'
     },
     touchPointTutorial: {
@@ -600,7 +683,10 @@ const BASE_MESSAGES: Record<Exclude<AcExHtmlLocale, 'ar'>, AcExMessageTree> = {
       areaTotal: '面积合计：{value}',
       zoomLayer: '缩放：{name}',
       loadFailed: '无法加载图纸：{error}',
-      noLayout: '快照中没有布局数据。'
+      noLayout: '快照中没有布局数据。',
+      loadingChunks: '正在加载几何… {loaded}/{total}',
+      loadingOsnap: '正在加载对象捕捉… {loaded}/{total}',
+      buildingOsnap: '正在构建对象捕捉索引…'
     },
     access: {
       title: '受保护的图纸',
@@ -688,6 +774,30 @@ const BASE_MESSAGES: Record<Exclude<AcExHtmlLocale, 'ar'>, AcExMessageTree> = {
       input: 'Barva',
       inputPlaceholder: '1-255 nebo #RRGGBB'
     },
+    shortCutToolbar: {
+      more: 'Více',
+      undo: 'Zpět',
+      redo: 'Znovu',
+      erase: 'Smazat'
+    },
+    textHeight: {
+      title: 'Výška textu',
+      close: 'Zavřít',
+      ok: 'OK',
+      cancel: 'Zrušit',
+      adaptive: 'Přizpůsobit obrazovce',
+      custom: 'Vlastní výška textu',
+      customPlaceholder: 'Světová výška',
+      fromScreen: 'Ze velikosti na obrazovce',
+      fromScreenHint:
+        'Zadejte, jak velký má text vypadat na obrazovce při aktuálním zoomu. Přepočítá se na pevnou světovou výšku, která se při pozdějším zoomování nemění.',
+      screenPxPlaceholder: 'Velikost písma',
+      screenUnit: 'px',
+      convert: 'Přepočítat'
+    },
+    entityPick: {
+      cancel: 'Zrušit výběr'
+    },
     layers: {
       title: 'Hladiny',
       close: 'Zavřít hladiny',
@@ -741,6 +851,10 @@ const BASE_MESSAGES: Record<Exclude<AcExHtmlLocale, 'ar'>, AcExMessageTree> = {
       y: 'Y',
       confirm: 'Potvrdit',
       cancel: 'Zrušit',
+      help: 'Nápověda',
+      back: 'Zpět',
+      collapse: 'Sbalit',
+      expand: 'Rozbalit',
       undo: 'Zpět'
     },
     touchPointTutorial: {
@@ -806,7 +920,10 @@ const BASE_MESSAGES: Record<Exclude<AcExHtmlLocale, 'ar'>, AcExMessageTree> = {
       areaTotal: 'Celková plocha: {value}',
       zoomLayer: 'Zoom: {name}',
       loadFailed: 'Nepodařilo se načíst výkres: {error}',
-      noLayout: 'Snímek neobsahuje data rozvržení.'
+      noLayout: 'Snímek neobsahuje data rozvržení.',
+      loadingChunks: 'Načítání geometrie… {loaded}/{total}',
+      loadingOsnap: 'Načítání uchopování… {loaded}/{total}',
+      buildingOsnap: 'Sestavování indexu uchopování…'
     },
     access: {
       title: 'Chráněný výkres',
@@ -896,6 +1013,30 @@ const BASE_MESSAGES: Record<Exclude<AcExHtmlLocale, 'ar'>, AcExMessageTree> = {
       input: 'Renk',
       inputPlaceholder: '1-255 veya #RRGGBB'
     },
+    shortCutToolbar: {
+      more: 'Daha fazla',
+      undo: 'Geri al',
+      redo: 'Yinele',
+      erase: 'Sil'
+    },
+    textHeight: {
+      title: 'Yazı Yüksekliği',
+      close: 'Kapat',
+      ok: 'Tamam',
+      cancel: 'İptal',
+      adaptive: 'Ekrana uyarla',
+      custom: 'Özel yazı yüksekliği',
+      customPlaceholder: 'Dünya yüksekliği',
+      fromScreen: 'Ekran boyutundan',
+      fromScreenHint:
+        'Geçerli yakınlaştırmada ekranda istediğiniz yazı boyutunu girin. Sabit bir dünya yüksekliğine dönüştürülür; sonra yakınlaştırınca bu yükseklik değişmez.',
+      screenPxPlaceholder: 'Yazı boyutu',
+      screenUnit: 'px',
+      convert: 'Dönüştür'
+    },
+    entityPick: {
+      cancel: 'Seçimi iptal et'
+    },
     layers: {
       title: 'Katmanlar',
       close: 'Katmanları kapat',
@@ -949,6 +1090,10 @@ const BASE_MESSAGES: Record<Exclude<AcExHtmlLocale, 'ar'>, AcExMessageTree> = {
       y: 'Y',
       confirm: 'Onayla',
       cancel: 'İptal',
+      help: 'Yardım',
+      back: 'Geri',
+      collapse: 'Daralt',
+      expand: 'Genişlet',
       undo: 'Geri al'
     },
     touchPointTutorial: {
@@ -1015,7 +1160,10 @@ const BASE_MESSAGES: Record<Exclude<AcExHtmlLocale, 'ar'>, AcExMessageTree> = {
       areaTotal: 'Toplam alan: {value}',
       zoomLayer: 'Yakınlaştır: {name}',
       loadFailed: 'Çizim yüklenemedi: {error}',
-      noLayout: 'Anlık görüntüde yerleşim verisi yok.'
+      noLayout: 'Anlık görüntüde yerleşim verisi yok.',
+      loadingChunks: 'Geometri yükleniyor… {loaded}/{total}',
+      loadingOsnap: 'Nesne yakalama yükleniyor… {loaded}/{total}',
+      buildingOsnap: 'Nesne yakalama dizini oluşturuluyor…'
     },
     access: {
       title: 'Korumalı çizim',
@@ -1108,6 +1256,21 @@ const AR_MESSAGES: AcExMessageTree = {
     'input': 'اللون',
     'inputPlaceholder': '1-255 أو #RRGGBB'
   },
+  'textHeight': {
+    'title': 'ارتفاع النص',
+    'close': 'إغلاق',
+    'ok': 'موافق',
+    'cancel': 'إلغاء',
+    'adaptive': 'ملاءمة الشاشة',
+    'custom': 'ارتفاع نص مخصص',
+    'customPlaceholder': 'ارتفاع العالم',
+    'fromScreen': 'من حجم الشاشة',
+    'fromScreenHint':
+      'أدخل حجم النص المطلوب على الشاشة عند التكبير الحالي. يُحوَّل إلى ارتفاع ثابت في إحداثيات الرسم ويبقى كما هو عند تغيير التكبير لاحقًا.',
+    'screenPxPlaceholder': 'حجم الخط',
+    'screenUnit': 'px',
+    'convert': 'تحويل'
+  },
   'layers': {
     'title': 'الطبقات',
     'close': 'إغلاق الطبقات',
@@ -1161,6 +1324,10 @@ const AR_MESSAGES: AcExMessageTree = {
     'y': 'Y',
     'confirm': 'تأكيد',
     'cancel': 'إلغاء',
+    'help': 'مساعدة',
+    'back': 'رجوع',
+    'collapse': 'طي',
+    'expand': 'توسيع',
     'undo': 'تراجع'
   },
   'touchPointTutorial': {
@@ -1217,7 +1384,10 @@ const AR_MESSAGES: AcExMessageTree = {
     'areaTotal': 'إجمالي المساحة: {value}',
     'zoomLayer': 'تكبير: {name}',
     'loadFailed': 'فشل تحميل الرسم: {error}',
-    'noLayout': 'لا توجد بيانات تخطيط في اللقطة.'
+    'noLayout': 'لا توجد بيانات تخطيط في اللقطة.',
+    'loadingChunks': 'جاري تحميل الهندسة… {loaded}/{total}',
+    'loadingOsnap': 'جاري تحميل الالتقاط… {loaded}/{total}',
+    'buildingOsnap': 'جاري بناء فهرس الالتقاط…'
   },
   access: {
     title: 'رسم محمي',

@@ -22,7 +22,11 @@ export default {
     x: 'X',
     y: 'Y',
     confirm: '确定',
-    cancel: '取消'
+    cancel: '取消',
+    help: '帮助',
+    back: '返回',
+    collapse: '收起',
+    expand: '展开'
   },
   inputManager: {
     firstCorner: '指定第一个角点或',
@@ -86,7 +90,31 @@ export default {
   },
   drawStyle: {
     color: '颜色',
-    fontSize: '字号'
+    fontSize: '字高'
+  },
+  shortCutToolbar: {
+    more: '更多',
+    undo: '撤销',
+    redo: '重做',
+    erase: '删除'
+  },
+  textHeight: {
+    title: '字高设置',
+    close: '关闭',
+    ok: '确定',
+    cancel: '取消',
+    adaptive: '自适应屏幕',
+    custom: '自定义字高',
+    customPlaceholder: '世界坐标字高',
+    fromScreen: '按屏幕字号换算',
+    fromScreenHint:
+      '按当前视图缩放，输入希望看到的屏幕字号（像素），换算为固定的世界坐标字高；之后缩放时字的世界高度不变。',
+    screenPxPlaceholder: '屏幕字号',
+    screenUnit: 'px',
+    convert: '换算'
+  },
+  entityPick: {
+    cancel: '取消选择'
   },
   colorPicker: {
     title: '选择颜色',

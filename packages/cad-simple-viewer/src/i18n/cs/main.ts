@@ -22,7 +22,11 @@ export default {
     x: 'X',
     y: 'Y',
     confirm: 'Potvrdit',
-    cancel: 'Zrušit'
+    cancel: 'Zrušit',
+    help: 'Nápověda',
+    back: 'Zpět',
+    collapse: 'Sbalit',
+    expand: 'Rozbalit'
   },
   inputManager: {
     firstCorner: 'Zadejte první roh nebo',
@@ -88,6 +92,30 @@ export default {
   drawStyle: {
     color: 'Barva',
     fontSize: 'Výška textu'
+  },
+  shortCutToolbar: {
+    more: 'Více',
+    undo: 'Zpět',
+    redo: 'Znovu',
+    erase: 'Smazat'
+  },
+  textHeight: {
+    title: 'Výška textu',
+    close: 'Zavřít',
+    ok: 'OK',
+    cancel: 'Zrušit',
+    adaptive: 'Přizpůsobit obrazovce',
+    custom: 'Vlastní výška textu',
+    customPlaceholder: 'Světová výška',
+    fromScreen: 'Ze velikosti na obrazovce',
+    fromScreenHint:
+      'Zadejte, jak velký má text vypadat na obrazovce při aktuálním zoomu. Přepočítá se na pevnou světovou výšku, která se při pozdějším zoomování nemění.',
+    screenPxPlaceholder: 'Velikost písma',
+    screenUnit: 'px',
+    convert: 'Přepočítat'
+  },
+  entityPick: {
+    cancel: 'Zrušit výběr'
   },
   colorPicker: {
     title: 'Vybrat barvu',

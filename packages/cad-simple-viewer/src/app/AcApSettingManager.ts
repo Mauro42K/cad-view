@@ -41,6 +41,8 @@ export interface AcApSettings {
   isShowRibbon: boolean
   /** Whether the toolbar is visible */
   isShowToolbar: boolean
+  /** Whether the floating shortcut toolbar (undo/redo/erase) is visible */
+  isShowShortCutToolbar: boolean
   /** Whether performance statistics are displayed */
   isShowStats: boolean
   /** Font mapping configuration for text rendering */
@@ -57,7 +59,8 @@ export interface AcApSettings {
   /**
    * When true (default), touch long-press point picks use a simulated mouse
    * crosshair above the finger so the fingertip does not obscure the sample.
-   * When false, the magnifier loupe tracks the finger itself.
+   * When false, the pick sample is the finger contact. In both modes a long
+   * press still shows the magnifier loupe around the active sample.
    */
   useSimulatedMouseOnTouch: boolean
 }
@@ -96,6 +99,7 @@ const DEFAULT_VALUES: AcApSettings = {
   isShowLanguageSelector: true,
   isShowRibbon: true,
   isShowToolbar: true,
+  isShowShortCutToolbar: true,
   isShowStats: false,
   fontMapping: {},
   osnapModes: acdbOsnapModesToMask([
@@ -560,6 +564,24 @@ export class AcApSettingManager<T extends AcApSettings = AcApSettings> {
    */
   set isShowToolbar(value: boolean) {
     this.set('isShowToolbar', value)
+  }
+
+  /**
+   * Gets whether the floating shortcut toolbar is visible.
+   *
+   * @returns True if the shortcut toolbar should be shown
+   */
+  get isShowShortCutToolbar() {
+    return this.get('isShowShortCutToolbar')
+  }
+
+  /**
+   * Sets whether the floating shortcut toolbar is visible.
+   *
+   * @param value - True to show the shortcut toolbar
+   */
+  set isShowShortCutToolbar(value: boolean) {
+    this.set('isShowShortCutToolbar', value)
   }
 
   /**
