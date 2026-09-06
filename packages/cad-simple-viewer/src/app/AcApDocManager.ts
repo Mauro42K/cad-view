@@ -97,8 +97,16 @@ import { AcApBusyIndicator } from './AcApBusyIndicator'
 import { acapBindCommandServices } from './AcApCommandServices'
 import { AcApContext } from './AcApContext'
 import { AcApDocSession } from './AcApDocSession'
+import {
+  ACAP_DEFAULT_DOCS_BASE_URL,
+  acapSetDocsBaseUrl
+} from './AcApDocsUrl'
 import { AcApDocument } from './AcApDocument'
 import { AcApFontLoader } from './AcApFontLoader'
+import {
+  AcApOpenDatabaseOptions,
+  AcApOpenViewMode
+} from './AcApOpenDatabaseOptions'
 import {
   acapInstallOpenFileDialog,
   type AcApOpenDocumentDefaultsResolver,
@@ -113,10 +121,6 @@ import {
   resetWebworkerReadinessCache
 } from './AcApWebworkerReadiness'
 import { AcApXrefManager } from './AcApXrefManager'
-import {
-  AcApOpenDatabaseOptions,
-  AcApOpenViewMode
-} from './AcDbOpenDatabaseOptions'
 
 const DEFAULT_BASE_URL = 'https://cdn.jsdelivr.net/gh/mlightcad/cad-data'
 /** Default ISO drawing template loaded by {@link AcApDocManager.newDocument}. */
@@ -324,6 +328,20 @@ export interface AcApDocManagerOptions {
   }
 
   /**
+   * Absolute root URL for localized user-guide pages (trailing slash optional).
+   * Used by {@link acapDocsUrl} for in-app help links (e.g. mobile magnifier).
+   * Defaults to {@link ACAP_DEFAULT_DOCS_BASE_URL} when omitted.
+   *
+   * @example
+   * ```typescript
+   * AcApDocManager.createInstance({
+   *   docsBaseUrl: 'https://example.com/my-product/docs/'
+   * })
+   * ```
+   */
+  docsBaseUrl?: string
+
+  /**
    * Optional command alias overrides.
    *
    * Key is command global name, value is one alias or alias list.
@@ -450,6 +468,7 @@ export class AcApDocManager {
    */
   private constructor(options: AcApDocManagerOptions = {}) {
     this._baseUrl = options.baseUrl ?? DEFAULT_BASE_URL
+    acapSetDocsBaseUrl(options.docsBaseUrl ?? ACAP_DEFAULT_DOCS_BASE_URL)
     this._commandAliasOverrides = this.normalizeCommandAliasConfig(
       options.commandAliases
     )
@@ -600,6 +619,14 @@ export class AcApDocManager {
     if (!AcApDocManager._instance) {
       throw new Error('AcApDocManager instance is not created yet!')
     }
+    return AcApDocManager._instance
+  }
+
+  /**
+   * Returns the singleton when {@link createInstance} has finished, otherwise
+   * `undefined`. Safe to call while the constructor is still running.
+   */
+  static tryGetInstance(): AcApDocManager | undefined {
     return AcApDocManager._instance
   }
 
