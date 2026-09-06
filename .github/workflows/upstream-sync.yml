@@ -28,13 +28,33 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     steps:
+      - name: Create GitHub App installation token
+        id: sync_app
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ vars.UPSTREAM_SYNC_APP_CLIENT_ID }}
+          private-key: ${{ secrets.UPSTREAM_SYNC_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: cad-view
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+
+      - name: Verify GitHub App access
+        env:
+          GH_TOKEN: ${{ steps.sync_app.outputs.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}" >/dev/null
+          gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=1" >/dev/null
+
       - name: Checkout downstream history
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Configure local Git identity
         run: |
@@ -195,13 +215,8 @@ jobs:
       - name: Push synchronization branch
         if: steps.reconcile.outputs.changed == 'true'
         env:
-          SYNC_PUSH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+          SYNC_PUSH_TOKEN: ${{ steps.sync_app.outputs.token }}
         run: |
-          if [ -z "${SYNC_PUSH_TOKEN}" ]; then
-            echo 'UPSTREAM_SYNC_TOKEN repository secret is required to publish workflow-file changes.' >&2
-            exit 1
-          fi
-          git config --local --unset-all http.https://github.com/.extraheader || true
           if git show-ref --verify --quiet "refs/remotes/origin/${SYNC_BRANCH}"; then
             lease="$(git rev-parse "refs/remotes/origin/${SYNC_BRANCH}")"
             git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${SYNC_PUSH_TOKEN}" | base64 -w0)" push --force-with-lease="refs/heads/${SYNC_BRANCH}:${lease}" origin "${SYNC_BRANCH}:${SYNC_BRANCH}"
@@ -212,7 +227,7 @@ jobs:
       - name: Create or update synchronization PR
         if: steps.reconcile.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+          GH_TOKEN: ${{ steps.sync_app.outputs.token }}
           UPSTREAM_SHA: ${{ steps.upstream_health.outputs.upstream_sha }}
         run: |
           set -euo pipefail
