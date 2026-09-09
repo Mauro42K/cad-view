@@ -243,7 +243,7 @@ jobs:
 
           pr_number="$(jq -r '.number' <<<"${response}")"
           pr_node_id="$(jq -r '.node_id' <<<"${response}")"
-          published_head="$(jq -r '.head.sha' <<<"${response}")"
+          published_head="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${SYNC_BRANCH}" --jq '.object.sha')"
           expected_head="$(git rev-parse HEAD)"
           if [ -z "${pr_node_id}" ] || [ "${pr_node_id}" = "null" ]; then
             echo "GitHub did not return a Pull Request node ID for #${pr_number}." >&2
