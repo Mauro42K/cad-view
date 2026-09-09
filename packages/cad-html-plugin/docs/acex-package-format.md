@@ -9,6 +9,8 @@ paint, repeat).
 > That zip is for **distribution only**. Unzip before hosting. The offline
 > viewer does **not** open a zip in place; it fetches `viewer.html`, then
 > `*.acex.json`, then individual `chunks/*.acex.gz` files.
+> For nginx/CDN setup, caching, and `.gz` Content-Encoding pitfalls, see
+> [acex-web-hosting-guide.md](./acex-web-hosting-guide.md).
 
 ## Directory layout
 
@@ -26,7 +28,17 @@ drawing/
 
 ### Shell HTML
 
-Contains `#mlcad-package` (JSON) instead of an embedded snapshot:
+Contains `#mlcad-package` (JSON marker) instead of an embedded snapshot. By
+default the config is empty — the generic viewer probes sibling
+`drawing.acex.json`, then query / folder / URL pickers:
+
+```html
+<script id="mlcad-package" type="application/json">
+{}
+</script>
+```
+
+Optional override (legacy or custom hosts):
 
 ```html
 <script id="mlcad-package" type="application/json">
@@ -34,7 +46,10 @@ Contains `#mlcad-package` (JSON) instead of an embedded snapshot:
 </script>
 ```
 
-`manifestUrl` may be relative to the HTML file or an absolute CDN URL.
+Runtime resolution order: `?manifest=` / `?acex=` → `#mlcad-package.manifestUrl`
+→ `./drawing.acex.json` → local folder or pasted URL UI. Absolute `http(s)`
+manifest URLs are allowed from the query / picker; chunk hrefs must stay
+relative to that manifest and same-origin with it.
 
 ## Versioning
 

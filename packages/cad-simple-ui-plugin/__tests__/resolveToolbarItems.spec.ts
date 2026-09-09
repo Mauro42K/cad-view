@@ -1,19 +1,29 @@
 /** Unit tests for toolbar item resolution and open-mode visibility filtering. */
-jest.mock('@mlightcad/cad-simple-viewer', () => ({
-  AcApDocManager: {
-    instance: {
-      curDocument: undefined
-    }
-  },
-  /** Minimal mock used by {@link acuiCreateDefaultToolbarItems} markup visibility toggle. */
-  isMarkupVisible: () => true,
-  isMeasurementVisible: () => true,
-  AcEdOpenMode: {
-    Read: 0,
-    Review: 4,
-    Write: 8
-  }
-}))
+jest.mock('@mlightcad/cad-simple-viewer', () => {
+  const { createCadSimpleViewerMock } = require('./helpers/mockCadSimpleViewer')
+  const openMode = jest.requireActual(
+    '../../cad-simple-viewer/src/editor/view/AcEdOpenMode'
+  ) as typeof import('../../cad-simple-viewer/src/editor/view/AcEdOpenMode')
+
+  return createCadSimpleViewerMock({
+    AcApDocManager: {
+      instance: {
+        curDocument: undefined,
+        isReadingModeEnabled: () => false
+      }
+    },
+    AcApSettingManager: {
+      instance: {
+        get: () => true,
+        toggle: jest.fn()
+      }
+    },
+    /** Minimal mock used by {@link acuiCreateDefaultToolbarItems} markup visibility toggle. */
+    isMarkupVisible: () => true,
+    isMeasurementVisible: () => true,
+    AcEdOpenMode: openMode.AcEdOpenMode
+  })
+})
 
 jest.mock('@mlightcad/data-model', () => ({
   acdbHostApplicationServices: () => ({
@@ -233,6 +243,25 @@ describe('default toolbar items', () => {
     expect(childIds).toContain('theme')
     expect(childIds).toContain('locale')
     expect(childIds).toContain('toolbar-placement')
+  })
+
+  it('exposes reading mode as a toggle and disables switch-bg while reading mode is on', () => {
+    const items = acuiCreateDefaultToolbarItems()
+    const settings = items.find(item => item.id === 'settings')
+    const readingMode = settings?.children?.find(
+      child => child.id === 'reading-mode'
+    )
+    const switchBg = settings?.children?.find(child => child.id === 'switch-bg')
+
+    expect(readingMode?.toggle?.getValue).toEqual(expect.any(Function))
+    expect(readingMode?.toggle?.on.command).toBe('readingmode')
+    expect(readingMode?.toggle?.off.command).toBe('readingmode')
+    expect(readingMode?.toggle?.getValue()).toBe(false)
+
+    expect(switchBg?.disabled).toEqual(expect.any(Function))
+    expect(typeof switchBg?.disabled === 'function' && switchBg.disabled()).toBe(
+      false
+    )
   })
 
   it('places toolbar placement before theme inside settings', () => {

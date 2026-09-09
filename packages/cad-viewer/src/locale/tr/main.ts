@@ -576,7 +576,9 @@ export default {
     },
     switchBg: {
       text: 'Değiştir',
-      description: 'Çizim arka planını beyaz ve siyah arasında değiştirir'
+      description: 'Çizim arka planını beyaz ve siyah arasında değiştirir',
+      disabledInReadingMode:
+        'Okuma modundayken kullanılamaz (beyaz tuval sabittir)'
     },
     zoomToExtent: {
       text: 'Tümünü Yakınlaştır',
@@ -1016,13 +1018,26 @@ export default {
       '"{fileName}" açılamadı. DWG dönüştürücü lisansı eksik veya geçersiz.',
     fetchingDrawingFile: 'Dosya alınıyor ...',
     unknownEntities:
-      'Bu çizim {count} bilinmeyen veya desteklenmeyen varlık içeriyor! Bu varlıklar gösterilmeyecek.'
+      'Bu çizim {count} bilinmeyen veya desteklenmeyen varlık içeriyor! Bu varlıklar gösterilmeyecek.',
+    tianzhengEntities:
+      'Bu çizim TArch / Tianzheng (veya benzeri üçüncü taraf) özel varlıklar içeriyor (yaklaşık {count}). Bu ortamda tam olarak ayrıştırılamazlar, bu nedenle bazı içerikler görüntülenmeyebilir.',
+    emptyProxyEntities:
+      'Bu çizim proxy grafiği olmayan {count} özel varlık içeriyor! Bu varlıklar gösterilmeyecek.'
   },
   notification: {
     center: {
       title: 'Bildirimler',
       clearAll: 'Tümünü Temizle',
       noNotifications: 'Bildirim yok'
+    },
+    group: {
+      fontMissed: 'Eksik Yazı Tipleri',
+      fontMissedSummary:
+        '{count} yazı tipi ile ilgili mesaj. Ayrıntılar için tıklayın.',
+      unsupportedEntities: 'Desteklenmeyen Varlıklar',
+      unsupportedEntitiesSummary:
+        '{count} ayrıştırma ile ilgili mesaj. Ayrıntılar için tıklayın.',
+      genericSummary: '{count} mesaj. Ayrıntılar için tıklayın.'
     },
     time: {
       justNow: 'Az önce',
@@ -1039,7 +1054,11 @@ export default {
       failedToOpenFileLicenseInvalid: 'Geçersiz Lisans',
       fontNotFound: 'Yazı Tipi Bulunamadı',
       fontNotLoaded: 'Yazı Tipi Yüklenemedi',
-      parsingWarning: 'Çizim Ayrıştırma Sorunları'
+      parsingWarning: 'Çizim Ayrıştırma Sorunları',
+      systemMessage: 'Sistem Mesajı',
+      systemWarning: 'Sistem Uyarısı',
+      systemError: 'Sistem Hatası',
+      systemInfo: 'Sistem Bilgisi'
     }
   }
 }

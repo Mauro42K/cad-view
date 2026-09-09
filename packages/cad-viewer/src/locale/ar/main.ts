@@ -807,7 +807,8 @@ export default {
     switchBg: {
       ...enMain.verticalToolbar.switchBg,
       text: 'تبديل',
-      description: 'التبديل بين خلفية الرسم السوداء والبيضاء'
+      description: 'التبديل بين خلفية الرسم السوداء والبيضاء',
+      disabledInReadingMode: 'غير متاح أثناء وضع القراءة (اللوحة البيضاء ثابتة)'
     },
 
     zoomToExtent: {
@@ -1494,7 +1495,13 @@ export default {
       'جارٍ جلب ملف الرسم ...',
 
     unknownEntities:
-      'يحتوي هذا الرسم على {count} عنصر غير معروف أو غير مدعوم. لن يتم عرض هذه العناصر.'
+      'يحتوي هذا الرسم على {count} عنصر غير معروف أو غير مدعوم. لن يتم عرض هذه العناصر.',
+
+    tianzhengEntities:
+      'يحتوي هذا الرسم على كيانات مخصصة من TArch / Tianzheng (أو جهات خارجية مشابهة) (حوالي {count}). لا يمكن تحليلها بالكامل في هذه البيئة، لذلك قد لا يُعرض بعض المحتوى.',
+
+    emptyProxyEntities:
+      'يحتوي هذا الرسم على {count} كيان مخصص بدون رسومات وكيلة. لن يتم عرض هذه العناصر.'
   },
 
   notification: {
@@ -1530,7 +1537,11 @@ export default {
       fontNotFound: 'الخط غير موجود',
       fontNotLoaded: 'لم يتم تحميل الخط',
 
-      parsingWarning: 'مشكلات أثناء تحليل الرسم'
+      parsingWarning: 'مشكلات أثناء تحليل الرسم',
+      systemMessage: 'رسالة النظام',
+      systemWarning: 'تحذير النظام',
+      systemError: 'خطأ النظام',
+      systemInfo: 'معلومات النظام'
     }
   }
 

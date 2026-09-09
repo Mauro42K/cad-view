@@ -35,17 +35,22 @@ import {
 import { setupAcExHtmlExpiryMonitor } from './AcExHtmlExpiryUi'
 import { AcExHtmlI18n, detectAcExHtmlLocale } from './AcExHtmlI18n'
 import { AcExHtmlIcons } from './AcExHtmlIcons'
-import { setupAcExHtmlLayoutMenu } from './AcExHtmlLayoutMenu'
+import {
+  type AcExHtmlMainToolbarController,
+  setupAcExHtmlMainToolbar} from './AcExHtmlMainToolbar'
 import { setupAcExHtmlMeasurePanel } from './AcExHtmlMeasurePanel'
 import { setupAcExHtmlMeasureSettings } from './AcExHtmlMeasureSettings'
 import { setupAcExHtmlNavTools } from './AcExHtmlNavTools'
+import {
+  acexGlobalFetch,
+  chooseInitialManifestHref,
+  probePackageManifest,
+  resolveViewerManifestUrl
+} from './AcExHtmlPackageBootstrap'
+import { promptAcExHtmlPackageSource } from './AcExHtmlPackageSourceGate'
 import { setupAcExHtmlReviewPanel } from './AcExHtmlReviewPanel'
 import { acexSyncHtmlShortCutSelection } from './AcExHtmlShortCutSelection'
 import { setupAcExHtmlShortCutToolbar } from './AcExHtmlShortCutToolbar'
-import {
-  setAcExHtmlParentChildIcon,
-  setupAcExHtmlToolbarFlyouts
-} from './AcExHtmlToolbarFlyout'
 import {
   type AcExIdlePointerHost,
   acexIdlePointerStrategy
@@ -54,8 +59,8 @@ import {
   computeLayerExtentsMap,
   resolveLayoutViewExtents
 } from './AcExLayerExtents'
-import { AcExMarkupController, type AcExMarkupMode } from './AcExMarkup'
-import { AcExMeasureController, type AcExMeasureMode } from './AcExMeasurement'
+import { AcExMarkupController } from './AcExMarkup'
+import { AcExMeasureController } from './AcExMeasurement'
 import {
   acexBindMobileSnapLoupe,
   acexHideMobileSnapLoupe,
@@ -66,9 +71,7 @@ import { AcExOsnapIndex, estimateOsnapRebuildWork } from './AcExOsnap'
 import { AcExOsnapMarker } from './AcExOsnapMarker'
 import {
   loadAcExPackageLayoutOsnap,
-  parseAcExPackageManifest,
   resolveChunkUrl,
-  resolvePackageManifestUrl,
   snapshotSkeletonFromManifest
 } from './AcExPackageLoader'
 import type { AcExPackageManifest } from './AcExPackageTypes'
@@ -111,7 +114,6 @@ import type {
 } from './AcExSnapshotTypes'
 import {
   acexIsSimulatedMouseEnabled,
-  acexToggleSimulatedMouse,
   type AcExTouchPickHudHost,
   acexTouchPickStrategy
 } from './AcExTouchPickStrategy'
@@ -300,6 +302,128 @@ function flipNearBlackWhiteMaterials(root: THREE.Object3D): void {
   })
 }
 
+/**
+ * Resolves a multi-file package session for generic `viewer.html`:
+ * query `?manifest=` / `?acex=` → config → sibling `drawing.acex.json` →
+ * folder / URL picker when the default file is missing.
+ */
+async function openAcExHtmlPackageSession(options: {
+  pageUrl: string
+  search: string
+  configManifestUrl?: string
+  i18n: AcExHtmlI18n
+}): Promise<{
+  manifest: AcExPackageManifest
+  manifestUrl: string
+  fetchImpl: typeof fetch
+} | null> {
+  const { i18n } = options
+  const initial = chooseInitialManifestHref({
+    search: options.search,
+    configManifestUrl: options.configManifestUrl
+  })
+
+  const tryUrl = async (
+    href: string,
+    fetchImpl: typeof fetch = acexGlobalFetch
+  ): Promise<
+    | { ok: true; manifest: AcExPackageManifest; manifestUrl: string }
+    | { ok: false; reason: 'not-found' | 'invalid' | 'network'; error: Error }
+  > => {
+    let manifestUrl: string
+    try {
+      manifestUrl = resolveViewerManifestUrl(href, options.pageUrl)
+    } catch (error) {
+      return {
+        ok: false,
+        reason: 'invalid',
+        error: error instanceof Error ? error : new Error(String(error))
+      }
+    }
+    const probed = await probePackageManifest(manifestUrl, fetchImpl)
+    if (!probed.ok) {
+      return { ok: false, reason: probed.reason, error: probed.error }
+    }
+    return { ok: true, manifest: probed.manifest, manifestUrl }
+  }
+
+  const first = await tryUrl(initial.href)
+  if (first.ok) {
+    return {
+      manifest: first.manifest,
+      manifestUrl: first.manifestUrl,
+      fetchImpl: acexGlobalFetch
+    }
+  }
+
+  // Query / explicit URL failures are fatal (show error, no picker).
+  if (initial.fromQuery || first.reason === 'invalid') {
+    const message =
+      first.reason === 'invalid'
+        ? i18n.t('package.invalidManifest', { error: first.error.message })
+        : i18n.t('package.loadFailed', { error: first.error.message })
+    showViewerError(message)
+    return null
+  }
+
+  // Sibling default missing → let the user pick a folder or paste a URL.
+  let gateErrorKey:
+    | 'package.manifestNotFound'
+    | 'package.invalidManifest'
+    | 'package.folderMissingManifest'
+    | 'package.loadFailed'
+    | undefined = 'package.manifestNotFound'
+  let gateErrorMessage: string | undefined
+
+  for (;;) {
+    let choice: Awaited<ReturnType<typeof promptAcExHtmlPackageSource>>
+    try {
+      choice = await promptAcExHtmlPackageSource(i18n, {
+        errorKey: gateErrorKey,
+        errorMessage: gateErrorMessage
+      })
+    } catch {
+      showViewerError(i18n.t('package.manifestNotFound'))
+      return null
+    }
+
+    if (choice.kind === 'url') {
+      const loaded = await tryUrl(choice.href)
+      if (loaded.ok) {
+        return {
+          manifest: loaded.manifest,
+          manifestUrl: loaded.manifestUrl,
+          fetchImpl: acexGlobalFetch
+        }
+      }
+      gateErrorKey =
+        loaded.reason === 'invalid'
+          ? 'package.invalidManifest'
+          : 'package.loadFailed'
+      gateErrorMessage = i18n.t(gateErrorKey, {
+        error: loaded.error.message
+      })
+      continue
+    }
+
+    const loaded = await tryUrl(choice.manifestUrl, choice.fetchImpl)
+    if (loaded.ok) {
+      return {
+        manifest: loaded.manifest,
+        manifestUrl: loaded.manifestUrl,
+        fetchImpl: choice.fetchImpl
+      }
+    }
+    gateErrorKey =
+      loaded.reason === 'invalid'
+        ? 'package.invalidManifest'
+        : 'package.loadFailed'
+    gateErrorMessage = i18n.t(gateErrorKey, {
+      error: loaded.error.message
+    })
+  }
+}
+
 function bootstrap(): void {
   void accmYieldForPaint().then(() => startViewer())
 }
@@ -386,6 +510,7 @@ async function startViewer(): Promise<void> {
   let packageSession: {
     manifest: AcExPackageManifest
     manifestUrl: string
+    fetchImpl: typeof fetch
     loadedLayouts: Set<string>
     loadedOsnapLayouts: Set<string>
   } | null = null
@@ -395,25 +520,20 @@ async function startViewer(): Promise<void> {
       const config = JSON.parse(packageEl.textContent?.trim() || '{}') as {
         manifestUrl?: string
       }
-      const manifestUrl = config.manifestUrl?.trim()
-      if (!manifestUrl) {
-        throw new Error('Missing manifestUrl in package config')
+      const opened = await openAcExHtmlPackageSession({
+        pageUrl: window.location.href,
+        search: window.location.search,
+        configManifestUrl: config.manifestUrl,
+        i18n
+      })
+      if (!opened) {
+        return
       }
-      const absoluteManifestUrl = resolvePackageManifestUrl(
-        manifestUrl,
-        window.location.href
-      )
-      const manifestResponse = await fetch(absoluteManifestUrl)
-      if (!manifestResponse.ok) {
-        throw new Error(
-          `Failed to load package manifest (${manifestResponse.status})`
-        )
-      }
-      const manifest = parseAcExPackageManifest(await manifestResponse.json())
-      snapshot = snapshotSkeletonFromManifest(manifest)
+      snapshot = snapshotSkeletonFromManifest(opened.manifest)
       packageSession = {
-        manifest,
-        manifestUrl: absoluteManifestUrl,
+        manifest: opened.manifest,
+        manifestUrl: opened.manifestUrl,
+        fetchImpl: opened.fetchImpl,
         loadedLayouts: new Set(),
         loadedOsnapLayouts: new Set()
       }
@@ -638,7 +758,7 @@ async function startViewer(): Promise<void> {
           total: String(chunks.length)
         })
         const url = resolveChunkUrl(packageSession.manifestUrl, chunkRef.href)
-        const response = await fetch(url)
+        const response = await packageSession.fetchImpl(url)
         if (!response.ok) {
           throw new Error(
             `Failed to load geometry chunk (${response.status})`
@@ -713,6 +833,7 @@ async function startViewer(): Promise<void> {
       target.btrId,
       target,
       {
+        fetchImpl: packageSession.fetchImpl,
         yieldFn: async () => {
           paintPackageChunk?.()
           await accmYieldForPaint()
@@ -1174,11 +1295,8 @@ async function startViewer(): Promise<void> {
   const measureSettingsRef: {
     current: ReturnType<typeof setupAcExHtmlMeasureSettings> | null
   } = { current: null }
-  const toolbarFlyoutsRef: {
-    current: ReturnType<typeof setupAcExHtmlToolbarFlyouts> | null
-  } = { current: null }
-  const layoutMenuRef: {
-    current: ReturnType<typeof setupAcExHtmlLayoutMenu> | null
+  const mainToolbarRef: {
+    current: AcExHtmlMainToolbarController | null
   } = { current: null }
   const navToolsRef: {
     current: ReturnType<typeof setupAcExHtmlNavTools> | null
@@ -1662,12 +1780,6 @@ async function startViewer(): Promise<void> {
     shortCutToolbarRef.current.syncActionState()
   }
 
-  const toolbarCollapse = setupToolbarCollapse(i18n, () => {
-    toolbarFlyoutsRef.current?.close()
-    layoutMenuRef.current?.close()
-    measureSettingsRef.current?.close()
-  })
-
   const closeLayerDrawer = () => {
     const layerDrawer = document.getElementById('mlcad-layer-drawer')
     const layersBtn = document.getElementById('mlcad-layers-btn')
@@ -1678,16 +1790,172 @@ async function startViewer(): Promise<void> {
 
   let reviewPanel: ReturnType<typeof setupAcExHtmlReviewPanel> = null
   let measurePanel: ReturnType<typeof setupAcExHtmlMeasurePanel> = null
+  let layerPanel: ReturnType<typeof setupLayerPanel> | null = null
 
   const drawerSheets = setupAcExHtmlDrawerSheets({
     closeStrips: () => {
-      toolbarFlyoutsRef.current?.close()
-      layoutMenuRef.current?.close()
+      mainToolbarRef.current?.dismissOpenChildren()
     }
   })
   drawerSheetsRef.current = drawerSheets
 
-  const layerPanel = setupLayerPanel({
+  const dismissToolbarChrome = () => {
+    mainToolbarRef.current?.dismissOpenChildren()
+    measureSettingsRef.current?.close()
+  }
+
+  const onToolbarChromeChange = () => {
+    // Layout rebuild may replace toolbar buttons; re-apply nav pressed state.
+    navToolsRef.current?.syncButtons()
+    drawerSheets.syncInset()
+    resize()
+    recomputeOsnapThresholdWcs()
+    bumpSnapCacheKey()
+    render()
+  }
+
+  const switchLayout = (btrId: string) => {
+    void switchLayoutAsync(btrId)
+  }
+
+  const toolbarHost = document.getElementById('mlcad-toolbar')
+  if (toolbarHost) {
+    mainToolbarRef.current = setupAcExHtmlMainToolbar({
+      host: toolbarHost,
+      themeHost: root,
+      i18n,
+      viewerMode,
+      exportLayouts: snapshot.meta.exportLayouts !== false,
+      layouts: snapshot.layouts.map(item => ({
+        btrId: item.btrId,
+        name: item.name
+      })),
+      getActiveLayoutBtrId: () => layout.btrId,
+      handlers: {
+        setNavMode: mode => {
+          navToolsRef.current?.setMode(mode)
+        },
+        fit: () => {
+          navToolsRef.current?.cancelZoomWindow()
+          measure?.cancelMode()
+          markup?.cancelMode()
+          fit()
+        },
+        restoreOriginalView: () => {
+          navToolsRef.current?.cancelZoomWindow()
+          measure?.cancelMode()
+          markup?.cancelMode()
+          restoreOriginalView()
+        },
+        cancelZoomWindow: () => navToolsRef.current?.cancelZoomWindow(),
+        toggleLayerDrawer: () => {
+          if (layerPanel) {
+            layerPanel.setOpen(!layerPanel.isOpen())
+            return
+          }
+          const drawer = document.getElementById('mlcad-layer-drawer')
+          if (!drawer) return
+          const open = drawer.hidden
+          if (open) {
+            reviewPanel?.close()
+            measurePanel?.close()
+            if (acexHtmlIsPhoneLayout()) drawerSheets.preparePhoneOpen(drawer)
+          }
+          drawer.hidden = !open
+          const layersBtn = document.getElementById('mlcad-layers-btn')
+          layersBtn?.classList.toggle('active', open)
+          layersBtn?.setAttribute('aria-expanded', String(open))
+        },
+        switchLayout,
+        setMeasureMode: mode => {
+          markup?.cancelMode()
+          measure?.setMode(mode)
+        },
+        toggleMeasurePanel: () => {
+          measure?.cancelMode()
+          markup?.cancelMode()
+          const drawer = document.getElementById('mlcad-measure-drawer')
+          measurePanel?.setOpen(Boolean(drawer?.hidden))
+        },
+        toggleMeasureVisibility: () => {
+          measure?.toggleVisible()
+        },
+        isMeasureVisible: () => measure?.visible !== false,
+        clearMeasurements: () => {
+          measure?.clearAll()
+        },
+        importMeasurements: () => {
+          measure?.importSidecar()
+        },
+        exportMeasurements: () => {
+          measure?.exportSidecar()
+        },
+        setMarkupMode: mode => {
+          measure?.cancelMode()
+          markup?.setMode(mode)
+        },
+        toggleMarkupPanel: () => {
+          measure?.cancelMode()
+          markup?.cancelMode()
+          const drawer = document.getElementById('mlcad-review-drawer')
+          reviewPanel?.setOpen(Boolean(drawer?.hidden))
+        },
+        toggleMarkupVisibility: () => {
+          markup?.toggleVisible()
+        },
+        isMarkupVisible: () => markup?.visible !== false,
+        clearMarkups: () => {
+          markup?.clearAll()
+        },
+        importMarkups: () => {
+          markup?.importSidecar()
+        },
+        exportMarkups: () => {
+          markup?.exportSidecar()
+        },
+        applyTheme: theme => {
+          applyHtmlTheme(theme)
+          i18n.applyToDocument()
+          mainToolbarRef.current?.refresh()
+        },
+        getTheme: () =>
+          (document.documentElement.getAttribute(
+            'data-mlcad-theme'
+          ) as AcExHtmlTheme | null) ?? 'dark',
+        switchBackground: () => {
+          switchDrawingBackground()
+        },
+        toggleOrtho: () => {
+          measureSettingsRef.current?.toggleOrtho()
+          mainToolbarRef.current?.refresh()
+        },
+        isOrtho: () => measureSettingsRef.current?.isOrtho() === true,
+        togglePolarPanel: () => {
+          const open =
+            measureSettingsRef.current?.togglePolarPanel() ?? false
+          mainToolbarRef.current?.refresh()
+          return open
+        },
+        isPolarPanelOpen: () =>
+          measureSettingsRef.current?.isPolarPanelOpen() === true,
+        onChromeChange: onToolbarChromeChange,
+        onExclusiveOpen: () => {
+          if (!acexHtmlIsPhoneLayout()) return
+          closeLayerDrawer()
+          reviewPanel?.close()
+          measurePanel?.close()
+        },
+        onCollapse: () => {
+          dismissToolbarChrome()
+          closeLayerDrawer()
+          reviewPanel?.close()
+          measurePanel?.close()
+        }
+      }
+    })
+  }
+
+  layerPanel = setupLayerPanel({
     snapshot,
     layerVisible,
     layerGroupMaps: [paperLayerGroups, modelLayerGroups],
@@ -1747,9 +2015,7 @@ async function startViewer(): Promise<void> {
         reviewOpen: reviewDrawer != null && !reviewDrawer.hidden,
         measureOpen: measureDrawer != null && !measureDrawer.hidden
       }
-      toolbarFlyoutsRef.current?.close()
-      layoutMenuRef.current?.close()
-      measureSettingsRef.current?.close()
+      dismissToolbarChrome()
       if (chromeBeforeSession.layerOpen) layerPanel?.close()
       if (chromeBeforeSession.reviewOpen) reviewPanel?.close()
       if (chromeBeforeSession.measureOpen) measurePanel?.close()
@@ -1763,10 +2029,6 @@ async function startViewer(): Promise<void> {
       if (saved?.measureOpen) measurePanel?.setOpen(true)
       render()
     }
-  }
-
-  const switchLayout = (btrId: string) => {
-    void switchLayoutAsync(btrId)
   }
 
   const remountLayoutRoots = (
@@ -1859,7 +2121,7 @@ async function startViewer(): Promise<void> {
         layerPanel?.syncLayerZoomButtons()
         measure?.syncLayoutVisibility()
         markup?.syncLayoutVisibility()
-        layoutMenuRef.current?.refresh()
+        mainToolbarRef.current?.refresh()
         recomputeOsnapThresholdWcs()
         bumpSnapCacheKey()
         render()
@@ -1939,7 +2201,7 @@ async function startViewer(): Promise<void> {
 
     measure?.syncLayoutVisibility()
     markup?.syncLayoutVisibility()
-    layoutMenuRef.current?.refresh()
+    mainToolbarRef.current?.refresh()
     recomputeOsnapThresholdWcs()
     bumpSnapCacheKey()
     render()
@@ -2010,170 +2272,7 @@ async function startViewer(): Promise<void> {
     event.preventDefault()
   })
 
-  const handleToolbarAction = (button: HTMLElement) => {
-    const action = button.getAttribute('data-action')
-    if (action === 'select' || action === 'pan' || action === 'zoom-window') {
-      navToolsRef.current?.setMode(action)
-      if (action === 'zoom-window') {
-        setAcExHtmlParentChildIcon('mlcad-zoom-menu-btn', button)
-      }
-      return
-    }
-    if (action === 'fit') {
-      navToolsRef.current?.cancelZoomWindow()
-      measure?.cancelMode()
-      markup?.cancelMode()
-      setAcExHtmlParentChildIcon('mlcad-zoom-menu-btn', button)
-      fit()
-    } else if (action === 'zoom-original') {
-      navToolsRef.current?.cancelZoomWindow()
-      measure?.cancelMode()
-      markup?.cancelMode()
-      setAcExHtmlParentChildIcon('mlcad-zoom-menu-btn', button)
-      restoreOriginalView()
-    } else if (action === 'clear-measurements') {
-      measure?.clearAll()
-    } else if (action === 'measure-visibility') {
-      measure?.toggleVisible()
-    } else if (action === 'measure-import') {
-      measure?.importSidecar()
-    } else if (action === 'measure-export') {
-      measure?.exportSidecar()
-    } else if (action === 'clear-markups') {
-      markup?.clearAll()
-    } else if (action === 'markup-visibility') {
-      markup?.toggleVisible()
-    } else if (action === 'markup-import') {
-      markup?.importSidecar()
-    } else if (action === 'markup-export') {
-      markup?.exportSidecar()
-    } else if (action === 'markup-panel') {
-      measure?.cancelMode()
-      markup?.cancelMode()
-      const drawer = document.getElementById('mlcad-review-drawer')
-      reviewPanel?.setOpen(Boolean(drawer?.hidden))
-    } else if (action === 'measure-panel') {
-      measure?.cancelMode()
-      markup?.cancelMode()
-      const drawer = document.getElementById('mlcad-measure-drawer')
-      measurePanel?.setOpen(Boolean(drawer?.hidden))
-    } else if (action === 'measure') {
-      markup?.cancelMode()
-      const mode = button.getAttribute(
-        'data-measure-mode'
-      ) as AcExMeasureMode | null
-      if (mode) {
-        measure?.setMode(mode)
-      }
-    } else if (action === 'markup') {
-      measure?.cancelMode()
-      const mode = button.getAttribute(
-        'data-markup-mode'
-      ) as AcExMarkupMode | null
-      if (mode) {
-        markup?.setMode(mode)
-      }
-    } else if (action === 'toggle-theme') {
-      const current =
-        (document.documentElement.getAttribute(
-          'data-mlcad-theme'
-        ) as AcExHtmlTheme | null) ?? 'dark'
-      const next: AcExHtmlTheme = current === 'dark' ? 'light' : 'dark'
-      applyHtmlTheme(next)
-      i18n.applyToDocument()
-    } else if (action === 'toggle-simulated-mouse') {
-      const enabled = acexToggleSimulatedMouse()
-      syncSimulatedMouseButton(enabled, i18n)
-    } else if (action === 'switch-bg') {
-      switchDrawingBackground()
-    }
-  }
-
-  document
-    .querySelectorAll('#mlcad-toolbar button[data-action]')
-    .forEach(button => {
-      button.addEventListener('click', () => {
-        const action = button.getAttribute('data-action')
-        // Parent menu buttons are handled by the flyout controller.
-        if (
-          action === 'measure-menu' ||
-          action === 'markup-menu' ||
-          action === 'snap-menu' ||
-          action === 'zoom-menu' ||
-          action === 'layout-menu' ||
-          action === 'settings-menu' ||
-          action === 'locale-menu'
-        ) {
-          return
-        }
-        handleToolbarAction(button as HTMLElement)
-      })
-    })
-
-  const toolbarFlyouts = setupAcExHtmlToolbarFlyouts({
-    onItemClick: handleToolbarAction,
-    onLocaleSelect: locale => i18n.setLocale(locale),
-    getLocale: () => i18n.locale,
-    onStripChange: () => {
-      drawerSheets.syncInset()
-      resize()
-      recomputeOsnapThresholdWcs()
-      bumpSnapCacheKey()
-      render()
-    },
-    onClose: menuId => {
-      if (menuId === 'snap') {
-        measureSettingsRef.current?.close()
-      }
-      // Measure / review results drawers are reparented onto the sidebar when
-      // opened. Closing the tool strip must not dismiss an open results panel
-      // (phone, pad, and desktop all dismiss the strip on child click).
-    },
-    onOpen: (menuId, menuRoot) => {
-      layoutMenuRef.current?.close()
-      if (acexHtmlIsPhoneLayout()) {
-        closeLayerDrawer()
-        reviewPanel?.close()
-        measurePanel?.close()
-      }
-      if (menuId === 'measure' && measure) {
-        measure.setVisible(measure.visible)
-        menuRoot.querySelectorAll('[data-measure-mode]').forEach(btn => {
-          const mode = btn.getAttribute('data-measure-mode')
-          btn.classList.toggle('active', mode === measure.mode)
-        })
-      } else if (menuId === 'review' && markup) {
-        markup.setVisible(markup.visible)
-        menuRoot.querySelectorAll('[data-markup-mode]').forEach(btn => {
-          const mode = btn.getAttribute('data-markup-mode')
-          btn.classList.toggle('active', mode === markup.mode)
-        })
-      } else if (menuId === 'zoom') {
-        const zoomWindow = navToolsRef.current?.getMode() === 'zoom-window'
-        menuRoot.querySelectorAll('[data-action]').forEach(btn => {
-          btn.classList.toggle(
-            'active',
-            btn.getAttribute('data-action') === 'zoom-window' && zoomWindow
-          )
-        })
-      }
-    }
-  })
-  toolbarFlyoutsRef.current = toolbarFlyouts
-
-  layoutMenuRef.current = setupAcExHtmlLayoutMenu({
-    layouts: snapshot.layouts,
-    getActiveLayoutBtrId: () => layout.btrId,
-    onSelect: switchLayout,
-    closeOtherFlyouts: () => {
-      toolbarFlyouts.close()
-      if (acexHtmlIsPhoneLayout()) {
-        closeLayerDrawer()
-        reviewPanel?.close()
-        measurePanel?.close()
-      }
-    }
-  })
+  mainToolbarRef.current?.setDocumentReady(true)
 
   i18n.setOnChange(() => {
     readyStatus = ''
@@ -2187,9 +2286,7 @@ async function startViewer(): Promise<void> {
     sessionPanel?.refreshLabels()
     measureSettingsRef.current?.refreshLabels()
     sessionDrawStyleRef.current?.refreshLabels()
-    toolbarCollapse.refreshLabels()
-    toolbarFlyouts?.refreshLabels()
-    navToolsRef.current?.refreshLabels()
+    mainToolbarRef.current?.refreshLabels()
     expiryMonitor?.refreshLabels()
     // Re-apply visibility button label after i18n DOM refresh.
     if (markup) {
@@ -2205,6 +2302,9 @@ async function startViewer(): Promise<void> {
       ) as AcExHtmlTheme | null) ?? 'dark'
     )
     i18n.applyToDocument()
+    mainToolbarRef.current?.refresh()
+    // Refresh rebuilds toolbar DOM; restore nav pressed state afterward.
+    navToolsRef.current?.syncButtons()
     sessionDrawStyleRef.current?.refresh()
   })
 
@@ -2247,10 +2347,15 @@ async function startViewer(): Promise<void> {
 
   window.addEventListener('resize', () => {
     resize()
-    toolbarFlyouts.syncLayout()
+    mainToolbarRef.current?.syncLayout()
     recomputeOsnapThresholdWcs()
     bumpSnapCacheKey()
     render()
+  })
+
+  window.addEventListener('pagehide', () => {
+    mainToolbarRef.current?.destroy()
+    mainToolbarRef.current = null
   })
 
   resize()
@@ -2356,76 +2461,6 @@ interface AcExLayerRowRefs {
   zoomBtn: HTMLButtonElement
 }
 
-/** Handles returned by {@link setupToolbarCollapse} for locale-driven UI updates. */
-interface AcExToolbarCollapseController {
-  refreshLabels: () => void
-}
-
-function setupToolbarCollapse(
-  i18n: AcExHtmlI18n,
-  closeStrips?: () => void
-): AcExToolbarCollapseController {
-  const sidebar = document.getElementById('mlcad-sidebar')
-  const toggleBtn = document.getElementById('mlcad-toolbar-toggle')
-  if (!sidebar || !toggleBtn) {
-    return { refreshLabels: () => {} }
-  }
-
-  let collapsed = false
-
-  const closeSidePanels = () => {
-    const layerDrawer = document.getElementById('mlcad-layer-drawer')
-    const layersBtn = document.getElementById('mlcad-layers-btn')
-
-    if (layerDrawer) layerDrawer.hidden = true
-    layersBtn?.classList.remove('active')
-    layersBtn?.setAttribute('aria-expanded', 'false')
-
-    const reviewDrawer = document.getElementById('mlcad-review-drawer')
-    if (reviewDrawer) reviewDrawer.hidden = true
-    document.querySelectorAll('[data-action="markup-panel"]').forEach(btn => {
-      btn.classList.remove('active')
-      btn.setAttribute('aria-pressed', 'false')
-    })
-
-    const measureDrawer = document.getElementById('mlcad-measure-drawer')
-    if (measureDrawer) measureDrawer.hidden = true
-    document.querySelectorAll('[data-action="measure-panel"]').forEach(btn => {
-      btn.classList.remove('active')
-      btn.setAttribute('aria-pressed', 'false')
-    })
-
-    closeStrips?.()
-  }
-
-  const syncToggle = () => {
-    sidebar.classList.toggle('mlcad-sidebar--collapsed', collapsed)
-    toggleBtn.innerHTML = collapsed
-      ? AcExHtmlIcons.chevronDown
-      : AcExHtmlIcons.chevronUp
-    toggleBtn.setAttribute('aria-expanded', String(!collapsed))
-    toggleBtn.dataset.i18nKey = collapsed
-      ? 'toolbar.expand'
-      : 'toolbar.collapse'
-    const label = i18n.t(collapsed ? 'toolbar.expand' : 'toolbar.collapse')
-    toggleBtn.setAttribute('title', label)
-    toggleBtn.setAttribute('aria-label', label)
-  }
-
-  toggleBtn.addEventListener('click', event => {
-    event.stopPropagation()
-    collapsed = !collapsed
-    if (collapsed) closeSidePanels()
-    syncToggle()
-  })
-
-  syncToggle()
-
-  return {
-    refreshLabels: () => syncToggle()
-  }
-}
-
 /** Dependencies passed into {@link setupLayerPanel}. */
 interface AcExLayerPanelContext {
   /** Full snapshot (layer table and metadata). */
@@ -2495,7 +2530,7 @@ function setupLayerPanel(
   const layerClose = document.getElementById('mlcad-layer-close')
   const showAllBtn = document.getElementById('mlcad-layer-show-all')
   const hideAllBtn = document.getElementById('mlcad-layer-hide-all')
-  if (!layersBtn || !layerDrawer || !layerList) return null
+  if (!layerDrawer || !layerList) return null
 
   const layerRows: AcExLayerRowRefs[] = []
 
@@ -2597,14 +2632,13 @@ function setupLayerPanel(
       onPhoneOpen?.(layerDrawer)
     }
     layerDrawer.hidden = !open
-    layersBtn.classList.toggle('active', open)
-    layersBtn.setAttribute('aria-expanded', String(open))
+    layersBtn?.classList.toggle('active', open)
+    layersBtn?.setAttribute('aria-expanded', String(open))
   }
 
-  layersBtn.addEventListener('click', event => {
-    event.stopPropagation()
-    setDrawerOpen(layerDrawer.hidden)
-  })
+  // Layer open/close is driven by MainToolbar `layer` action via
+  // {@link AcExHtmlMainToolbarHandlers.toggleLayerDrawer}; do not bind the
+  // annotated `#mlcad-layers-btn` click here (would double-toggle).
 
   layerClose?.addEventListener('click', () => setDrawerOpen(false))
   layerDrawer

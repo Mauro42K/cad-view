@@ -532,11 +532,12 @@ export default {
     },
     switchBg: {
       text: '切换背景色',
-      description: '在白色与黑色之间切换绘图背景色'
+      description: '在白色与黑色之间切换绘图背景色',
+      disabledInReadingMode: '阅读模式下不可用（白底固定）'
     },
     readingMode: {
       text: '阅读模式',
-      description: '切换阅读模式：白底黑线，便于阅读复杂图纸'
+      description: '切换阅读模式（白底黑线，便于审阅）'
     },
     zoomToExtent: {
       text: '范围缩放',
@@ -970,13 +971,24 @@ export default {
       '无法打开"{fileName}"。DWG 转换器许可证缺失或无效。',
     fetchingDrawingFile: '正在加载图纸文件...',
     unknownEntities:
-      '这张图纸中包含了{count}个未知或不支持的实体，这些实体将无法显示！'
+      '这张图纸中包含了{count}个未知或不支持的实体，这些实体将无法显示！',
+    tianzhengEntities:
+      '检测到天正（或同类第三方）自定义图元（约 {count} 个）。当前环境无法完整解析这些图元，部分内容可能无法显示。',
+    emptyProxyEntities:
+      '这张图纸中包含了{count}个缺少代理图形的自定义实体，这些实体将无法显示！'
   },
   notification: {
     center: {
       title: '通知',
       clearAll: '清除全部',
       noNotifications: '暂无通知'
+    },
+    group: {
+      fontMissed: '字体缺失',
+      fontMissedSummary: '共 {count} 条字体相关消息，点击展开查看详情',
+      unsupportedEntities: '不支持的图元',
+      unsupportedEntitiesSummary: '共 {count} 条解析相关消息，点击展开查看详情',
+      genericSummary: '共 {count} 条消息，点击展开查看详情'
     },
     time: {
       justNow: '刚刚',
@@ -993,7 +1005,11 @@ export default {
       failedToOpenFileLicenseInvalid: '许可证无效',
       fontNotFound: '找不到字体',
       fontNotLoaded: '无法加载字体',
-      parsingWarning: '解析图纸问题'
+      parsingWarning: '解析图纸问题',
+      systemMessage: '系统消息',
+      systemWarning: '系统警告',
+      systemError: '系统错误',
+      systemInfo: '系统信息'
     }
   }
 }
