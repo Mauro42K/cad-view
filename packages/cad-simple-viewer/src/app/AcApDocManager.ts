@@ -19,7 +19,9 @@ import {
   AcApCacheFontCmd,
   AcApCircleCmd,
   AcApCloseCmd,
+  AcApConvertToBmpCmd,
   AcApConvertToDxfCmd,
+  AcApConvertToJpgCmd,
   AcApConvertToPngCmd,
   AcApCopyCmd,
   AcApDimLinearCmd,
@@ -85,7 +87,8 @@ import {
   AcEdCalculateSizeCallback,
   AcEdCommand,
   AcEdCommandStack,
-  AcEdOpenMode
+  AcEdOpenMode,
+  eventBus
 } from '../editor'
 import { AcApPluginManager } from '../plugin/AcApPluginManager'
 import { isScriptQuitCommand, parseScriptLines } from '../util/AcApScriptParser'
@@ -121,6 +124,11 @@ import {
   resetWebworkerReadinessCache
 } from './AcApWebworkerReadiness'
 import { AcApXrefManager } from './AcApXrefManager'
+import {
+  acapDisposeNotificationService,
+  acapInstallNotificationService,
+  type AcUiNotificationBellPlacement
+} from './notification'
 
 const DEFAULT_BASE_URL = 'https://cdn.jsdelivr.net/gh/mlightcad/cad-data'
 /** Default ISO drawing template loaded by {@link AcApDocManager.newDocument}. */
@@ -364,11 +372,51 @@ export interface AcApDocManagerOptions {
   builtinOpenFileDialog?: boolean
 
   /**
+   * When true, drawing export commands are not registered (`cdxf`, `pngout`,
+   * `jpgout`, `bmpout`, and host UI / lazy plugins for HTML, PDF, SVG export).
+   * Defaults to false (export remains enabled).
+   *
+   * Useful for deployments that must hide export entry points. This is a
+   * product/UX gate, not a DRM boundary: drawing data still exists in memory.
+   */
+  disableExport?: boolean
+
+  /**
    * Default options for files opened through the built-in OPEN command dialog.
    *
    * Can be updated later via {@link AcApDocManager.setOpenDocumentDefaults}.
    */
   openDocumentDefaults?: AcApOpenDocumentDefaultsResolver
+
+  /**
+   * Built-in notification center (font missing, unsupported entities, etc.).
+   *
+   * Notifications are scoped per document session (MDI). The default DOM UI is
+   * positioned relative to the canvas host, not the browser window.
+   *
+   * - omitted / `true`: install event bridge + default DOM bell UI
+   * - `false`: do not install bridge or UI (host handles events itself)
+   * - `{ showDefaultUi: false }`: bridge only — host should call
+   *   {@link acapSetNotificationCenter} to supply UI (as cad-viewer does)
+   */
+  notificationCenter?:
+    | boolean
+    | {
+        /**
+         * Host for the default bell/panel. Defaults to the active view canvas
+         * container (`curView.container`).
+         */
+        host?: HTMLElement
+        /** When false, skip the built-in DOM UI. Default true. */
+        showDefaultUi?: boolean
+        /**
+         * Corner for the built-in notification bell.
+         *
+         * When omitted: phone `top-right`, pad / desktop `bottom-right`.
+         * Change later with {@link acapSetNotificationUiPlacement}.
+         */
+        placement?: AcUiNotificationBellPlacement
+      }
 }
 
 /**
@@ -428,6 +476,8 @@ export class AcApDocManager {
   private _commandAliasOverrides: Map<string, string[]>
   /** Default options for the built-in OPEN file dialog */
   private _openDocumentDefaults?: AcApOpenDocumentDefaultsResolver
+  /** Whether drawing export commands and related UI entry points are disabled */
+  private _disableExport: boolean
   /** Singleton instance */
   private static _instance?: AcApDocManager
   /** Worker URLs configured at initialization */
@@ -473,6 +523,7 @@ export class AcApDocManager {
       options.commandAliases
     )
     this._openDocumentDefaults = options.openDocumentDefaults
+    this._disableExport = options.disableExport === true
     if (options.useMainThreadDraw) {
       AcTrMTextRenderer.getInstance().setRenderMode('main')
     } else {
@@ -526,9 +577,10 @@ export class AcApDocManager {
     acapBindMarkupSession(this._activeSession.id)
 
     this._fontLoader = new AcApFontLoader()
+    // Share one DefaultFontLoader cache between UI catalog and on-demand draws.
+    FontManager.instance.setFontLoader(this._fontLoader.fontLoader)
     const fontsUrl = this.resolveFontsBaseUrl()
     this._fontLoader.baseUrl = fontsUrl
-    // On-demand loads go through FontManager's loader, not AcApFontLoader.
     FontManager.instance.baseUrl = fontsUrl
     acdbHostApplicationServices().workingDatabase = doc.database
 
@@ -581,6 +633,19 @@ export class AcApDocManager {
       enabled: options.builtinOpenFileDialog !== false,
       getOpenDocumentDefaults: () => this.resolveOpenDocumentDefaults()
     })
+
+    if (options.notificationCenter !== false) {
+      const ncOptions =
+        typeof options.notificationCenter === 'object'
+          ? options.notificationCenter
+          : {}
+      acapInstallNotificationService(this, {
+        host: ncOptions.host,
+        showDefaultUi: ncOptions.showDefaultUi !== false,
+        placement: ncOptions.placement,
+        enableBridge: true
+      })
+    }
   }
 
   /**
@@ -646,6 +711,7 @@ export class AcApDocManager {
     }
     this._sessions = []
     acapUninstallOpenFileDialog()
+    acapDisposeNotificationService()
     AcTrMTextRenderer.resetInstance()
     resetWebworkerReadinessCache()
     AcApDocManager._instance = undefined
@@ -1010,6 +1076,14 @@ export class AcApDocManager {
   }
 
   /**
+   * Whether drawing export commands (and host export UI) are disabled.
+   * Set via {@link AcApDocManagerOptions.disableExport}; defaults to false.
+   */
+  get disableExport() {
+    return this._disableExport
+  }
+
+  /**
    * Resolves colors for creating new entities.
    *
    * Returns:
@@ -1063,11 +1137,29 @@ export class AcApDocManager {
    * Gets the list of available fonts that can be loaded.
    *
    * Note: These fonts are available for loading but may not be loaded yet.
+   * Prefer {@link getAvaiableFonts} when the catalog may not have been fetched yet
+   * (lazy font loading no longer preloads metadata at viewer init).
    *
    * @returns Array of available font names
    */
   get avaiableFonts() {
     return this._fontLoader.avaiableFonts
+  }
+
+  /**
+   * Fetches font repository metadata (`fonts.json`) if not already cached.
+   * Emits `failed-to-get-avaiable-fonts` and returns `[]` when the catalog cannot
+   * be retrieved.
+   */
+  async getAvaiableFonts() {
+    try {
+      return await this._fontLoader.getAvaiableFonts()
+    } catch {
+      eventBus.emit('failed-to-get-avaiable-fonts', {
+        url: this._fontLoader.baseUrl
+      })
+      return []
+    }
   }
 
   /**
@@ -1090,7 +1182,7 @@ export class AcApDocManager {
    *
    * This method loads either the specified fonts or the configured default font
    * fallback chains ({@link DEFAULT_FONTS_PRESET}, currently `modern`: text
-   * `hztxt` 鈫?`simsun`, symbol `amgdt`) if no fonts are provided. The loaded
+   * `simsun` → `hztxt`, symbol `amgdt`) if no fonts are provided. The loaded
    * fonts are used for rendering CAD text entities like MText and Text in the viewer.
    *
    * It is better to load default fonts when viewer is initialized so that the viewer can
@@ -1596,8 +1688,9 @@ export class AcApDocManager {
    * Registers all default commands available in the CAD viewer.
    *
    * This method sets up the command system by registering built-in commands including:
-   * - cdxf: Convert to DXF
-   * - pngout: Export to PNG
+   * - cdxf: Convert to DXF (when {@link AcApDocManagerOptions.disableExport} is false)
+   * - pngout / jpgout / bmpout: Export raster images (when
+   *   {@link AcApDocManagerOptions.disableExport} is false)
    * - log: Output debug information in console
    * - open: Open document
    * - qnew: Quick new document
@@ -1642,8 +1735,12 @@ export class AcApDocManager {
     addSystemCommand('cachefont', 'cachefont', new AcApCacheFontCmd())
     addSystemCommand('circle', 'circle', new AcApCircleCmd())
     addSystemCommand('close', 'close', new AcApCloseCmd())
-    addSystemCommand('cdxf', 'cdxf', new AcApConvertToDxfCmd())
-    addSystemCommand('pngout', 'pngout', new AcApConvertToPngCmd())
+    if (!this._disableExport) {
+      addSystemCommand('bmpout', 'bmpout', new AcApConvertToBmpCmd())
+      addSystemCommand('cdxf', 'cdxf', new AcApConvertToDxfCmd())
+      addSystemCommand('jpgout', 'jpgout', new AcApConvertToJpgCmd())
+      addSystemCommand('pngout', 'pngout', new AcApConvertToPngCmd())
+    }
     addSystemCommand('entout', 'entout', new AcApEntityPreviewCmd())
     addSystemCommand('ellipse', 'ellipse', new AcApEllipseCmd())
     addSystemCommand('erase', 'erase', new AcApEraseCmd())
