@@ -6,7 +6,7 @@ import { viteStaticCopy } from 'vite-plugin-static-copy'
 import svgLoader from 'vite-svg-loader'
 import { visualizer } from 'rollup-plugin-visualizer'
 import vue from '@vitejs/plugin-vue'
-import { exampleRollupOutput } from '../vite-config/pluginRollupOutput'
+import { examplePeerPackageAliases, exampleRollupOutput } from '../vite-config/pluginRollupOutput'
 import {
   LIBREDWG_CONVERTER_PACKAGE,
   LIBREDWG_PARSER_WASM_FILE,
@@ -28,6 +28,16 @@ const LOCAL_UI_COMPONENTS_SRC = resolve(
 const LOCAL_UI_COMPONENTS_ROOT = resolve(
   __dirname,
   '../../../ui-components'
+)
+const LOCAL_MTEXT_RENDERER_ROOT = resolve(
+  __dirname,
+  '../../../mtext-renderer/packages/mtext-renderer'
+)
+const LOCAL_MTEXT_RENDERER_DIST = resolve(LOCAL_MTEXT_RENDERER_ROOT, 'dist')
+const LOCAL_MTEXT_RENDERER_ENTRY = resolve(LOCAL_MTEXT_RENDERER_DIST, 'index.js')
+const LOCAL_MTEXT_RENDERER_WORKER = resolve(
+  LOCAL_MTEXT_RENDERER_DIST,
+  MTEXT_RENDERER_WORKER_FILE
 )
 
 function isEnvFlagEnabled(name: string): boolean {
@@ -60,6 +70,8 @@ export default defineConfig(({ command, mode }) => {
   const aliases: Alias[] = []
   const devSourcePackages = [
     'cad-svg-plugin',
+    'cad-pdf-plugin',
+    'pdf-renderer',
     'three-renderer',
     'cad-simple-viewer',
     'cad-viewer'
@@ -72,11 +84,27 @@ export default defineConfig(({ command, mode }) => {
     command === 'serve' &&
     useLocalUiComponents(mode) &&
     existsSync(LOCAL_UI_COMPONENTS_SRC)
+  const linkLocalMtextRenderer =
+    command === 'serve' && existsSync(LOCAL_MTEXT_RENDERER_ENTRY)
   if (command === 'serve') {
     aliases.push({
-      find: /^@mlightcad\/(cad-svg-plugin|three-renderer|cad-simple-viewer|cad-viewer)$/,
+      find: /^@mlightcad\/cad-pdf-plugin\/register$/,
+      replacement: resolve(__dirname, '../cad-pdf-plugin/src/register.ts')
+    })
+    aliases.push({
+      find: /^@mlightcad\/(cad-svg-plugin|cad-pdf-plugin|pdf-renderer|three-renderer|cad-simple-viewer|cad-viewer)$/,
       replacement: resolve(__dirname, '../$1/src')
     })
+    if (linkLocalMtextRenderer) {
+      console.info(
+        '[cad-viewer-example] Aliasing @mlightcad/mtext-renderer to local dist:',
+        LOCAL_MTEXT_RENDERER_DIST
+      )
+      aliases.push({
+        find: '@mlightcad/mtext-renderer',
+        replacement: LOCAL_MTEXT_RENDERER_DIST
+      })
+    }
     if (linkLocalDataModel) {
       aliases.push({
         find: '@mlightcad/data-model',
@@ -108,6 +136,12 @@ export default defineConfig(({ command, mode }) => {
     }
   }
 
+  aliases.push(
+    ...examplePeerPackageAliases(__dirname).filter(
+      alias => alias.find !== '@mlightcad/mtext-renderer'
+    )
+  )
+
   const libredwgDist = `./node_modules/${LIBREDWG_CONVERTER_PACKAGE}/dist`
   const libredwgWasmSrc = resolve(
     __dirname,
@@ -116,6 +150,9 @@ export default defineConfig(({ command, mode }) => {
     'dist',
     LIBREDWG_PARSER_WASM_FILE
   )
+  const mtextWorkerSrc = linkLocalMtextRenderer
+    ? LOCAL_MTEXT_RENDERER_WORKER
+    : `./node_modules/@mlightcad/cad-simple-viewer/dist/${MTEXT_RENDERER_WORKER_FILE}`
 
   const plugins = [
     vue(),
@@ -123,7 +160,7 @@ export default defineConfig(({ command, mode }) => {
     viteStaticCopy({
       targets: [
         {
-          src: `./node_modules/@mlightcad/cad-simple-viewer/dist/${MTEXT_RENDERER_WORKER_FILE}`,
+          src: mtextWorkerSrc,
           dest: 'assets',
           rename: { stripBase: true }
         },
@@ -165,12 +202,24 @@ export default defineConfig(({ command, mode }) => {
     },
     optimizeDeps: {
       force: command === 'serve',
+      // Pre-bundle pdf-lib so the first lazy `cpdf` import does not trigger a
+      // Vite optimizeDeps full-page reload in the example app.
+      include:
+        command === 'serve'
+          ? [
+              'pdf-lib',
+              '@pdf-lib/standard-fonts',
+              '@pdf-lib/upng',
+              'pako'
+            ]
+          : [],
       exclude:
         command === 'serve'
           ? [
               ...devSourcePackages.map(name => `@mlightcad/${name}`),
               ...(linkLocalDataModel ? ['@mlightcad/data-model'] : []),
-              ...(linkLocalUiComponents ? ['@mlightcad/ui-components'] : [])
+              ...(linkLocalUiComponents ? ['@mlightcad/ui-components'] : []),
+              ...(linkLocalMtextRenderer ? ['@mlightcad/mtext-renderer'] : [])
             ]
           : []
     },
@@ -178,7 +227,8 @@ export default defineConfig(({ command, mode }) => {
       fs: {
         allow: [
           resolve(__dirname, '../..'),
-          ...(linkLocalUiComponents ? [LOCAL_UI_COMPONENTS_ROOT] : [])
+          ...(linkLocalUiComponents ? [LOCAL_UI_COMPONENTS_ROOT] : []),
+          ...(linkLocalMtextRenderer ? [LOCAL_MTEXT_RENDERER_ROOT] : [])
         ]
       }
     },

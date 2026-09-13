@@ -48,6 +48,7 @@ import {
   AcEdConditionWaiter,
   AcEdCorsorType,
   AcEdGripManager,
+  acedGuardCanvasTouchCallout,
   acedInteractionStrategy,
   acedIsTouchDerivedMouseEvent,
   AcEdMTextEditor,
@@ -67,6 +68,10 @@ import {
   readLayoutBackgroundColor
 } from '../editor/global/AcEdUiColor'
 import { ML_UI_Z_CANVAS_HTML_OVERLAY } from '../editor/global/AcEdUiLayout'
+import {
+  acedEntityIntersectsSelectionBox,
+  acedNeedsCrossingGeometryRefine
+} from '../editor/view/AcEdSelectionBoxIntersect'
 import { isEffectiveSpatialQueryHit } from '../editor/view/AcEdSpatialQueryResult'
 import type { AcTrSpatialSearchOptions } from '../spatialIndex/AcTrSpatialIndex'
 import { AcTrGeometryUtil } from '../util'
@@ -280,6 +285,8 @@ export class AcTrView2d extends AcEdBaseView {
   private _gripManager: AcEdGripManager
   /** Global keyboard shortcuts for the view (undo/redo, erase, etc.). */
   private _keyHandler: AcEdViewKeyHandler
+  /** Removes iOS canvas long-press callout listeners registered in the constructor. */
+  private _disposeCanvasTouchCallout: (() => void) | undefined
   /** Transient reading mode forces black linework on a white canvas. */
   private readonly _readingMode = new AcApReadingModeState({
     getCurrentBackgroundColor: () => this._renderer.currentBackgroundColor,
@@ -340,13 +347,14 @@ export class AcTrView2d extends AcEdBaseView {
     renderer.domElement.style.maxWidth = '100%'
     renderer.domElement.style.maxHeight = '100%'
     // Keep one-finger picks (measure snap loupe) from being stolen by the
-    // browser scroll / long-press context-menu gesture.
-    renderer.domElement.style.touchAction = 'none'
-    renderer.domElement.style.userSelect = 'none'
-    renderer.domElement.style.setProperty('-webkit-user-select', 'none')
-    renderer.domElement.style.setProperty('-webkit-touch-callout', 'none')
+    // browser scroll / long-press copy-selection callout (especially iOS).
+    const disposeCanvasTouchCallout = acedGuardCanvasTouchCallout(
+      renderer.domElement,
+      container
+    )
 
     super(renderer.domElement, container)
+    this._disposeCanvasTouchCallout = disposeCanvasTouchCallout
     this._gripManager = new AcEdGripManager(this)
     this._keyHandler = new AcEdViewKeyHandler(this)
     if (options.calculateSizeCallback) {
@@ -1750,6 +1758,46 @@ export class AcTrView2d extends AcEdBaseView {
   }
 
   /**
+   * Drops crossing spatial hits whose curve geometry misses the pick box.
+   *
+   * Large closed polylines (site boundaries, frames) have AABBs that cover
+   * huge empty interiors. Without this refine, crossing a small INSERT inside
+   * that interior also selects those polylines and can stall highlight work.
+   */
+  protected override refineCrossingSelectionHits(
+    box: AcGeBox2d,
+    results: AcEdSpatialQueryResultItemEx[]
+  ): AcDbObjectId[] {
+    const database = AcApDocManager.instance.curDocument?.database
+    if (!database) {
+      return results.map(item => item.id)
+    }
+
+    const ids: AcDbObjectId[] = []
+    for (const item of results) {
+      if (!acedNeedsCrossingGeometryRefine(item)) {
+        ids.push(item.id)
+        continue
+      }
+
+      const entityBox = new AcGeBox2d(
+        { x: item.minX, y: item.minY },
+        { x: item.maxX, y: item.maxY }
+      )
+      if (box.containsBox(entityBox)) {
+        ids.push(item.id)
+        continue
+      }
+
+      const entity = database.tables.blockTable.getEntityById(item.id)
+      if (!entity || acedEntityIntersectsSelectionBox(entity, box)) {
+        ids.push(item.id)
+      }
+    }
+    return ids
+  }
+
+  /**
    * @inheritdoc
    */
   addLayer(layer: AcDbLayerTableRecord) {
@@ -2397,6 +2445,18 @@ export class AcTrView2d extends AcEdBaseView {
       cancelAnimationFrame(this._rafId)
       this._rafId = null
     }
+  }
+
+  /**
+   * Releases canvas DOM listeners and stops the animation loop.
+   *
+   * Call when this view will no longer be used (manager destroy / split
+   * view teardown). Safe to call more than once.
+   */
+  dispose() {
+    this._disposeCanvasTouchCallout?.()
+    this._disposeCanvasTouchCallout = undefined
+    this.stopAnimationLoop()
   }
 
   /**
