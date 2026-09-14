@@ -10,12 +10,10 @@ import {
   AcExCommandSessionPanel,
   type AcExCommandSessionUiState
 } from './AcExCommandSessionPanel'
-import {
-  acexCssTopLeftRectToGl,
-  acexWcsBoxToCssRect
-} from './AcExCssRect'
+import { acexCssTopLeftRectToGl, acexWcsBoxToCssRect } from './AcExCssRect'
 import { acexSetDocsBaseUrl } from './AcExDocsUrl'
 import {
+  createAcExHtmlAccessKey,
   decryptAcExHtmlSnapshotPayload,
   isAcExHtmlAccessExpired,
   parseAcExHtmlAccessManifest
@@ -30,12 +28,20 @@ import {
   acexHtmlIsPhoneLayout,
   setupAcExHtmlDrawerSheets
 } from './AcExHtmlDrawerSheet'
+import {
+  ACEX_EMBEDDED_CHUNK_HREF_ATTR,
+  collectAcExEmbeddedChunkBytes,
+  createAcExEmbeddedPackageFetch,
+  decryptAcExEmbeddedManifest,
+  parseAcExEmbeddedPackageConfig
+} from './AcExHtmlEmbeddedPackage'
 import { setupAcExHtmlExpiryMonitor } from './AcExHtmlExpiryUi'
 import { AcExHtmlI18n, detectAcExHtmlLocale } from './AcExHtmlI18n'
 import { AcExHtmlIcons } from './AcExHtmlIcons'
 import {
   type AcExHtmlMainToolbarController,
-  setupAcExHtmlMainToolbar} from './AcExHtmlMainToolbar'
+  setupAcExHtmlMainToolbar
+} from './AcExHtmlMainToolbar'
 import { setupAcExHtmlMeasurePanel } from './AcExHtmlMeasurePanel'
 import { setupAcExHtmlMeasureSettings } from './AcExHtmlMeasureSettings'
 import { setupAcExHtmlNavTools } from './AcExHtmlNavTools'
@@ -233,15 +239,10 @@ function applyHtmlTheme(theme: AcExHtmlTheme): void {
  * @param enabled - Current preference value.
  * @param i18n - Active i18n instance used to refresh visible labels.
  */
-function syncSimulatedMouseButton(
-  enabled: boolean,
-  i18n: AcExHtmlI18n
-): void {
+function syncSimulatedMouseButton(enabled: boolean, i18n: AcExHtmlI18n): void {
   const btn = document.getElementById('mlcad-simulated-mouse-btn')
   if (!btn) return
-  const key = enabled
-    ? 'toolbar.simulatedMouseOn'
-    : 'toolbar.simulatedMouseOff'
+  const key = enabled ? 'toolbar.simulatedMouseOn' : 'toolbar.simulatedMouseOff'
   btn.classList.toggle('active', enabled)
   btn.setAttribute('data-i18n-key', key)
   btn.setAttribute('data-i18n-attr', 'title aria-label')
@@ -303,6 +304,104 @@ function flipNearBlackWhiteMaterials(root: THREE.Object3D): void {
       flipMaterialColor(mat)
     }
   })
+}
+
+/**
+ * Opens a self-contained HTML that embeds progressive ACEX chunks
+ * (`#mlcad-package` with `mode: "embedded"`).
+ */
+async function openAcExHtmlEmbeddedPackageSession(
+  packageEl: HTMLElement,
+  i18n: AcExHtmlI18n
+): Promise<{
+  manifest: AcExPackageManifest
+  manifestUrl: string
+  fetchImpl: typeof fetch
+  expiresAt: number | null
+} | null> {
+  const config = parseAcExEmbeddedPackageConfig(packageEl.textContent)
+  if (!config) {
+    showViewerError(
+      i18n.t('status.loadFailed', { error: 'Invalid embedded package.' })
+    )
+    return null
+  }
+
+  const accessEl = document.getElementById('mlcad-access')
+  const access = parseAcExHtmlAccessManifest(accessEl?.textContent)
+  const expiresAt = access?.expiresAt ?? null
+
+  if (access && isAcExHtmlAccessExpired(access)) {
+    showAcExHtmlAccessExpired(i18n, expiresAt)
+    return null
+  }
+
+  let manifest: AcExPackageManifest | null = null
+  let decryptKey: CryptoKey | null = null
+
+  if (config.encrypted) {
+    if (!access?.encrypted || !access.salt) {
+      showViewerError(
+        i18n.t('status.loadFailed', { error: 'Missing access metadata.' })
+      )
+      return null
+    }
+
+    let failedAttempts = 0
+    let pendingError: 'access.wrongPassword' | undefined
+
+    while (failedAttempts < ACEX_HTML_MAX_PASSWORD_ATTEMPTS) {
+      try {
+        const password = await promptAcExHtmlAccessPassword(i18n, {
+          errorKey: pendingError,
+          expiresAt
+        })
+        pendingError = undefined
+        try {
+          const { key } = await createAcExHtmlAccessKey(password, access.salt)
+          manifest = await decryptAcExEmbeddedManifest(
+            config.encryptedManifest,
+            key
+          )
+          decryptKey = key
+          break
+        } catch {
+          failedAttempts++
+          if (failedAttempts >= ACEX_HTML_MAX_PASSWORD_ATTEMPTS) {
+            lockAcExHtmlAccessGate(i18n)
+            return null
+          }
+          pendingError = 'access.wrongPassword'
+        }
+      } catch {
+        return null
+      }
+    }
+    if (!manifest || !decryptKey) {
+      return null
+    }
+  } else {
+    manifest = config.manifest
+  }
+
+  const chunkBytes = collectAcExEmbeddedChunkBytes(document)
+  // Drop chunk script nodes after reading so the DOM can reclaim the text.
+  document
+    .querySelectorAll(`script[${ACEX_EMBEDDED_CHUNK_HREF_ATTR}]`)
+    .forEach(node => node.remove())
+
+  const session = createAcExEmbeddedPackageFetch({
+    manifest,
+    chunkBytes,
+    decryptKey
+  })
+
+  return {
+    manifest,
+    manifestUrl: session.manifestUrl,
+    fetchImpl: session.fetchImpl,
+    expiresAt
+  }
 }
 
 /**
@@ -520,27 +619,52 @@ async function startViewer(): Promise<void> {
 
   try {
     if (packageEl) {
-      const config = JSON.parse(packageEl.textContent?.trim() || '{}') as {
-        manifestUrl?: string
+      const rawConfig = packageEl.textContent?.trim() || '{}'
+      let packageMode: string | undefined
+      try {
+        packageMode = (JSON.parse(rawConfig) as { mode?: string }).mode
+      } catch {
+        packageMode = undefined
       }
-      const opened = await openAcExHtmlPackageSession({
-        pageUrl: window.location.href,
-        search: window.location.search,
-        configManifestUrl: config.manifestUrl,
-        i18n
-      })
-      if (!opened) {
-        return
+
+      if (packageMode === 'embedded') {
+        const opened = await openAcExHtmlEmbeddedPackageSession(packageEl, i18n)
+        if (!opened) {
+          return
+        }
+        snapshot = snapshotSkeletonFromManifest(opened.manifest)
+        expiresAt = opened.expiresAt
+        packageSession = {
+          manifest: opened.manifest,
+          manifestUrl: opened.manifestUrl,
+          fetchImpl: opened.fetchImpl,
+          loadedLayouts: new Set(),
+          loadedOsnapLayouts: new Set()
+        }
+        removeSnapshotElement(packageEl)
+      } else {
+        const config = JSON.parse(rawConfig) as {
+          manifestUrl?: string
+        }
+        const opened = await openAcExHtmlPackageSession({
+          pageUrl: window.location.href,
+          search: window.location.search,
+          configManifestUrl: config.manifestUrl,
+          i18n
+        })
+        if (!opened) {
+          return
+        }
+        snapshot = snapshotSkeletonFromManifest(opened.manifest)
+        packageSession = {
+          manifest: opened.manifest,
+          manifestUrl: opened.manifestUrl,
+          fetchImpl: opened.fetchImpl,
+          loadedLayouts: new Set(),
+          loadedOsnapLayouts: new Set()
+        }
+        removeSnapshotElement(packageEl)
       }
-      snapshot = snapshotSkeletonFromManifest(opened.manifest)
-      packageSession = {
-        manifest: opened.manifest,
-        manifestUrl: opened.manifestUrl,
-        fetchImpl: opened.fetchImpl,
-        loadedLayouts: new Set(),
-        loadedOsnapLayouts: new Set()
-      }
-      removeSnapshotElement(packageEl)
     } else if (snapshotEl) {
       const resolved = await resolveSnapshotPayload(snapshotEl, i18n)
       if (!resolved) {
@@ -766,9 +890,7 @@ async function startViewer(): Promise<void> {
         const url = resolveChunkUrl(packageSession.manifestUrl, chunkRef.href)
         const response = await packageSession.fetchImpl(url)
         if (!response.ok) {
-          throw new Error(
-            `Failed to load geometry chunk (${response.status})`
-          )
+          throw new Error(`Failed to load geometry chunk (${response.status})`)
         }
         const contentLength = response.headers.get('content-length')
         if (contentLength != null) {
@@ -1288,6 +1410,7 @@ async function startViewer(): Promise<void> {
   }
   sessionPanel?.setHandlers({
     onConfirm: () => {
+      if (markup?.confirmSession(sessionPanel.getStringValue())) return
       measure?.confirmSession()
     },
     onCancel: () => {
@@ -1573,10 +1696,7 @@ async function startViewer(): Promise<void> {
   }
 
   paintPackageChunk = () => {
-    const next = computeLayerExtentsMap(
-      layout.lineBatches,
-      layout.meshBatches
-    )
+    const next = computeLayerExtentsMap(layout.lineBatches, layout.meshBatches)
     layerExtents.clear()
     for (const [name, extents] of next) {
       layerExtents.set(name, extents)
@@ -1763,11 +1883,9 @@ async function startViewer(): Promise<void> {
         }
       },
       getActionState: () => ({
-        undo:
-          measure?.canUndoLastVertex() === true || sessionHistory.canUndo(),
+        undo: measure?.canUndoLastVertex() === true || sessionHistory.canUndo(),
         redo: sessionHistory.canRedo(),
-        erase:
-          markup?.hasSelection === true || measure?.hasSelection === true
+        erase: markup?.hasSelection === true || measure?.hasSelection === true
       })
     })
     syncHtmlShortCutSelection()
@@ -1925,8 +2043,7 @@ async function startViewer(): Promise<void> {
         },
         isOrtho: () => measureSettingsRef.current?.isOrtho() === true,
         togglePolarPanel: () => {
-          const open =
-            measureSettingsRef.current?.togglePolarPanel() ?? false
+          const open = measureSettingsRef.current?.togglePolarPanel() ?? false
           mainToolbarRef.current?.refresh()
           return open
         },
@@ -1947,6 +2064,19 @@ async function startViewer(): Promise<void> {
         }
       }
     })
+  }
+
+  const markGeometryReady = (ready: boolean) => {
+    mainToolbarRef.current?.setGeometryReady(ready)
+  }
+  const markOsnapReady = (ready: boolean) => {
+    // View-only HTML has no measure/annotation buttons; treat OSNAP as ready
+    // whenever geometry is ready so readiness stays consistent.
+    if (!measureEnabled) {
+      mainToolbarRef.current?.setOsnapReady(true)
+      return
+    }
+    mainToolbarRef.current?.setOsnapReady(ready)
   }
 
   layerPanel = setupLayerPanel({
@@ -2074,10 +2204,11 @@ async function startViewer(): Promise<void> {
     layout = next
 
     const needsPackageLoad =
-      packageSession != null &&
-      !packageSession.loadedLayouts.has(layout.btrId)
+      packageSession != null && !packageSession.loadedLayouts.has(layout.btrId)
 
     if (needsPackageLoad && packageSession) {
+      markGeometryReady(false)
+      markOsnapReady(false)
       try {
         await loadPackageLayoutGeometry(layout)
         if (
@@ -2088,6 +2219,7 @@ async function startViewer(): Promise<void> {
         ) {
           await loadPackageLayoutGeometry(modelLayout)
         }
+        markGeometryReady(true)
       } catch (error) {
         statusEl.textContent = i18n.t('status.loadFailed', {
           error: String(error)
@@ -2115,6 +2247,11 @@ async function startViewer(): Promise<void> {
         layerPanel?.syncLayerZoomButtons()
         measure?.syncLayoutVisibility()
         markup?.syncLayoutVisibility()
+        markGeometryReady(true)
+        markOsnapReady(
+          !measureEnabled ||
+            packageSession.loadedOsnapLayouts.has(previousLayout.btrId)
+        )
         mainToolbarRef.current?.refresh()
         recomputeOsnapThresholdWcs()
         bumpSnapCacheKey()
@@ -2155,6 +2292,10 @@ async function startViewer(): Promise<void> {
     layoutExtents = resolveLayoutViewExtents(layout)
     layerPanel?.syncLayerZoomButtons()
 
+    if (measureEnabled) {
+      markOsnapReady(false)
+    }
+
     if (osnapIndex) {
       // Defer rebuild when ACEO sidecars are still pending — tessellating all
       // line/mesh batches first would freeze the UI and delay Network fetches.
@@ -2178,8 +2319,12 @@ async function startViewer(): Promise<void> {
           for (const [name, visible] of layerVisible) {
             osnapIndex.setLayerHidden(name, visible === false)
           }
-        } finally {
           clearStatusBar()
+        } catch (error) {
+          statusEl.textContent = i18n.t('status.loadFailed', {
+            error: String(error)
+          })
+          // Continue the layout switch; measure unlocks in the OSNAP paths below.
         }
       }
     }
@@ -2204,22 +2349,24 @@ async function startViewer(): Promise<void> {
     if (packageSession && measureEnabled) {
       try {
         await loadPackageLayoutOsnap(layout)
-        if (
-          !layout.isModelSpace &&
-          hasPaperViewports &&
-          modelLayout
-        ) {
+        if (!layout.isModelSpace && hasPaperViewports && modelLayout) {
           await loadPackageLayoutOsnap(modelLayout)
         }
         await rebuildOsnapForLoadedGeometry()
         bumpSnapCacheKey()
         render()
         measure?.refreshIdleStatus()
+        markOsnapReady(true)
       } catch (error) {
         statusEl.textContent = i18n.t('status.loadFailed', {
           error: String(error)
         })
+        // Geometry is already on screen; unlock measure/annotation even if
+        // OSNAP indexing failed (snap will be degraded / unavailable).
+        markOsnapReady(true)
       }
+    } else if (measureEnabled) {
+      markOsnapReady(true)
     }
   }
 
@@ -2265,8 +2412,6 @@ async function startViewer(): Promise<void> {
   renderer.domElement.addEventListener('contextmenu', event => {
     event.preventDefault()
   })
-
-  mainToolbarRef.current?.setDocumentReady(true)
 
   i18n.setOnChange(() => {
     readyStatus = ''
@@ -2380,27 +2525,39 @@ async function startViewer(): Promise<void> {
       onExpire: () => {
         // Keep the canvas mounted under the expired gate; interaction is blocked
         // by the loading overlay.
+        shortCutToolbarRef.current?.syncTopOffset()
       }
     })
+    shortCutToolbarRef.current?.syncTopOffset()
   }
   // Reveal the canvas before package chunks / OSNAP indexing finish so the
-  // drawing paints while background work continues.
+  // drawing paints while background work continues. Toolbar stays disabled
+  // until geometry is ready; canvas wheel / pinch zoom still works.
   hideLoading()
 
-  if (!packageSession && measureEnabled) {
-    try {
-      await rebuildOsnapForLoadedGeometry()
-      recomputeOsnapThresholdWcs()
-      bumpSnapCacheKey()
-      measure?.refreshIdleStatus()
-      render()
-    } catch (error) {
-      showViewerError(i18n.t('status.loadFailed', { error: String(error) }))
-    }
-    if (!canSwitchLayouts) {
-      releaseLayerGroupsGeometryCpuArrays(paperLayerGroups)
-      releaseLayerGroupsGeometryCpuArrays(modelLayerGroups)
-      releaseSnapshotBatchBuffers(snapshot)
+  if (!packageSession) {
+    markGeometryReady(true)
+    if (measureEnabled) {
+      markOsnapReady(false)
+      try {
+        await rebuildOsnapForLoadedGeometry()
+        recomputeOsnapThresholdWcs()
+        bumpSnapCacheKey()
+        measure?.refreshIdleStatus()
+        render()
+        markOsnapReady(true)
+      } catch (error) {
+        showViewerError(i18n.t('status.loadFailed', { error: String(error) }))
+        // Drawing is visible; allow measure/annotation without a full snap index.
+        markOsnapReady(true)
+      }
+      if (!canSwitchLayouts) {
+        releaseLayerGroupsGeometryCpuArrays(paperLayerGroups)
+        releaseLayerGroupsGeometryCpuArrays(modelLayerGroups)
+        releaseSnapshotBatchBuffers(snapshot)
+      }
+    } else {
+      markOsnapReady(true)
     }
   }
 
@@ -2422,11 +2579,13 @@ async function startViewer(): Promise<void> {
       bumpSnapCacheKey()
       measure?.refreshIdleStatus()
       render()
+      markGeometryReady(true)
 
       // ACEO now holds curves/points only (lines come from geometry batches).
       // Load the small catalog first, then build a hybrid index while CPU
       // lineBatches are still resident — before releaseSnapshotBatchBuffers.
       if (measureEnabled) {
+        markOsnapReady(false)
         for (const target of firstPaintLayouts) {
           await loadPackageLayoutOsnap(target)
         }
@@ -2435,6 +2594,9 @@ async function startViewer(): Promise<void> {
         bumpSnapCacheKey()
         measure?.refreshIdleStatus()
         render()
+        markOsnapReady(true)
+      } else {
+        markOsnapReady(true)
       }
 
       if (!canSwitchLayouts) {
@@ -2444,6 +2606,10 @@ async function startViewer(): Promise<void> {
       }
     } catch (error) {
       showViewerError(i18n.t('status.loadFailed', { error: String(error) }))
+      // Unlock chrome even when package geometry / OSNAP failed mid-stream so
+      // the toolbar does not stay permanently disabled after the error gate.
+      markGeometryReady(true)
+      markOsnapReady(true)
     }
   }
 }
@@ -2876,11 +3042,7 @@ function setupToolPointerInput(options: AcExToolPointerInputOptions): void {
   const applyTouchPreciseSample = (fingerX: number, fingerY: number) => {
     const sample = acexTouchPickStrategy().mapFingerToSample(fingerX, fingerY)
     previewDrawingPoint(sample.x, sample.y)
-    acexTouchPickStrategy().showPreciseHud(
-      touchPickHudHost,
-      sample.x,
-      sample.y
-    )
+    acexTouchPickStrategy().showPreciseHud(touchPickHudHost, sample.x, sample.y)
   }
   /** Idle box-select / zoom-window rubber band after a long-press or mouse down. */
   let boxGesture: {
