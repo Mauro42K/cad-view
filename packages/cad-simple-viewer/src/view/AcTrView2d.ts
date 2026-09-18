@@ -21,6 +21,7 @@ import {
   AcGeMatrix3d,
   AcGePoint2d,
   AcGePoint2dLike,
+  acgiForegroundColorForBackground,
   log
 } from '@mlightcad/data-model'
 import { AcDbSystemVariables } from '@mlightcad/data-model'
@@ -323,9 +324,9 @@ export class AcTrView2d extends AcEdBaseView {
   /**
    * Max concurrent deferred glyph/INSERT geometry finalizers. Large drawings
    * enqueue thousands of jobs; keep this modest to limit peak JS heap during
-   * "Rendering drawing ..." while retaining reasonable open throughput.
+   * open while retaining reasonable text throughput after convert finishes.
    */
-  private static readonly DEFERRED_GEOMETRY_CONCURRENCY = 4
+  private static readonly DEFERRED_GEOMETRY_CONCURRENCY = 8
 
   /**
    * Creates a new 2D CAD viewer instance.
@@ -842,12 +843,25 @@ export class AcTrView2d extends AcEdBaseView {
    * True while batch conversion or deferred glyph/group geometry is still
    * running.
    *
-   * Parsing can report 100% before this reaches zero; callers opening files
-   * should wait on this (as {@link zoomToFitDrawing} does) before hiding
-   * progress UI or assuming the canvas is ready.
+   * Parsing can report 100% before this reaches zero; callers that need a
+   * fully drawable scene (export, scripted zoom) should wait on this (as
+   * {@link waitUntilIdle} / {@link zoomToFitDrawing} do).
+   *
+   * The open-file progress overlay intentionally uses
+   * {@link isConvertingEntities} instead so "Rendering drawing ..." can hide
+   * once linework convert finishes while text geometry continues in the
+   * deferred pool.
    */
   get isProcessingEntities() {
     return this._numOfEntitiesToProcess > 0 || this._pendingGeometryJobs > 0
+  }
+
+  /**
+   * True while the entity convert queue / {@link batchConvert} is still
+   * draining. Does **not** include deferred glyph/INSERT geometry jobs.
+   */
+  get isConvertingEntities() {
+    return this._numOfEntitiesToProcess > 0
   }
 
   /**
@@ -1033,6 +1047,11 @@ export class AcTrView2d extends AcEdBaseView {
     this._renderer.currentBackgroundColor = value
     this._layerAppearance.refreshTextMaterialsInObjectTree(
       this._scene.internalScene
+    )
+    // Style-manager changeForeground only updates cache entries; batch
+    // containers own private material clones and must be repainted too.
+    this._scene.repaintForegroundMaterials(
+      acgiForegroundColorForBackground(value)
     )
     this.resyncForegroundLayersForBackground()
     if (this._readingMode.isEnabled) {
@@ -1411,11 +1430,12 @@ export class AcTrView2d extends AcEdBaseView {
   /**
    * Re-render points with latest point style settings
    * @param displayMode Input display mode of points
+   * @param displaySize Input display size of points (`PDSIZE`)
    */
-  rerenderPoints(displayMode: number) {
+  rerenderPoints(displayMode: number, displaySize: number = 0) {
     const activeLayout = this._scene.activeLayout
     if (activeLayout) {
-      activeLayout.rerenderPoints(displayMode)
+      activeLayout.rerenderPoints(displayMode, displaySize)
       this._isDirty = true
     }
   }
@@ -2800,13 +2820,9 @@ export class AcTrView2d extends AcEdBaseView {
     _progressive: boolean
   ) {
     if (threeEntity instanceof AcTrGroup) {
-      // Compacted INSERT templates may skip syncDraw when fonts are awaited
-      // later; still walk for empty glyph shells. Skip only when there is
-      // nothing left to finalize (incl. post-cache ATTRIBs).
-      if (
-        threeEntity.getSourceEntities().length === 0 &&
-        !this.groupHasPendingGlyphGeometry(threeEntity)
-      ) {
+      // Linework-only INSERTs (no empty glyph shells) skip asyncDraw; spatial
+      // boxes are refreshed by syncGroupSpatialBoundsForIndexing after commit.
+      if (!this.groupHasPendingGlyphGeometry(threeEntity)) {
         return
       }
       await threeEntity.asyncDraw()
@@ -2819,9 +2835,15 @@ export class AcTrView2d extends AcEdBaseView {
   }
 
   private needsDeferredFontGeometry(threeEntity: AcTrEntity): boolean {
-    return (
-      threeEntity instanceof AcTrGlyphEntity || threeEntity instanceof AcTrGroup
-    )
+    if (threeEntity instanceof AcTrGlyphEntity) {
+      return !threeEntity.hasDrawableGeometry()
+    }
+    // Only defer INSERTs that still have empty glyph shells. Linework-only
+    // blocks should commit on the convert path and not occupy the geometry pool.
+    if (threeEntity instanceof AcTrGroup) {
+      return this.groupHasPendingGlyphGeometry(threeEntity)
+    }
+    return false
   }
 
   private clearFontLoadedRedrawTimer() {
