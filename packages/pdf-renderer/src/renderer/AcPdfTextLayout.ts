@@ -309,8 +309,16 @@ export function layoutMText(params: AcPdfTextLayoutParams): AcPdfTextLayout {
     size: height,
     hScale
   })
-  const step = (data.lineSpaceFactor ?? 1) * LINE_SPACING_RATIO * height
-  const maxWidthLimit = data.width > 0 ? data.width : undefined
+  const factorSpacing = (data.lineSpaceFactor ?? 1) * LINE_SPACING_RATIO * height
+  const step =
+    data.lineSpaceStyle === 2
+      ? factorSpacing
+      : Math.max(factorSpacing, LINE_SPACING_RATIO * height)
+  // `Infinity` means "do not wrap" (arc-aligned glyphs, unwrapped TEXT).
+  // A finite column is required; otherwise centered attachment shifts the
+  // run to -Infinity and the text never lands on the page.
+  const maxWidthLimit =
+    Number.isFinite(data.width) && data.width > 0 ? data.width : undefined
 
   // Wrap each paragraph against the column width, keeping its justification.
   const wrapped: Array<{ items: WrapItem[]; justify?: AcPdfMTextJustify }> = []
