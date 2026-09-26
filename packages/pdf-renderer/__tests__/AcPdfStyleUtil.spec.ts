@@ -53,6 +53,16 @@ describe('AcPdfStyleUtil', () => {
     const style = AcPdfStyleUtil.strokeStyle(createTraits(), ctx)
     expect(style.rgb).toEqual({ r: 1, g: 0, b: 0 })
     expect(style.lineWidth).toBe(0)
+    expect(style.exactWidth).toBe(true)
+  })
+
+  it('uses exactWidth hairline when showLineWeight is off so the page min floor is skipped', () => {
+    const style = AcPdfStyleUtil.strokeStyle(createTraits(), {
+      ...ctx,
+      showLineWeight: false
+    })
+    expect(style.lineWidth).toBe(0)
+    expect(style.exactWidth).toBe(true)
   })
 
   it('darkens true-colour white strokes on white paper', () => {
@@ -131,5 +141,31 @@ describe('AcPdfStyleUtil', () => {
     )
     expect(transparency.isByAlpha).toBe(true)
     expect(style.opacity).toBeCloseTo(128 / 255, 5)
+  })
+
+  it('omits dashArray for complex TEXT linetypes (including LibreDWG swap)', () => {
+    const style = AcPdfStyleUtil.strokeStyle(
+      createTraits({
+        lineType: {
+          type: 'ByLayer',
+          name: 'VCP',
+          standardFlag: 0,
+          description: '6" VCP C700  - 6" VCP C700 -',
+          totalPatternLength: 2.25,
+          pattern: [
+            { elementLength: 1.05, elementTypeFlag: 0 },
+            {
+              elementLength: -0.6,
+              elementTypeFlag: 0,
+              shapeNumber: 2,
+              text: ' '
+            },
+            { elementLength: -0.6, elementTypeFlag: 0 }
+          ]
+        }
+      }),
+      ctx
+    )
+    expect(style.dashArray).toBeUndefined()
   })
 })
