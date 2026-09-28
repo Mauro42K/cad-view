@@ -811,15 +811,34 @@ export default {
       disabledInReadingMode: 'غير متاح أثناء وضع القراءة (اللوحة البيضاء ثابتة)'
     },
 
+    zoom: {
+      ...enMain.verticalToolbar.zoom,
+      text: 'تكبير',
+      description: 'أدوات التكبير: محفوظ، ملاءمة، ملاءمة ذكية، ونافذة'
+    },
+
+    zoomSaved: {
+      ...enMain.verticalToolbar.zoomSaved,
+      text: 'محفوظ',
+      description:
+        'استعادة العرض المحفوظ في AutoCAD (VPORT / حدود التخطيط) أو عرض وقت الفتح'
+    },
+
     zoomToExtent: {
       ...enMain.verticalToolbar.zoomToExtent,
-      text: 'ملاءمة الرسم',
+      text: 'ملاءمة',
       description: 'إظهار كامل حدود جميع عناصر الرسم'
+    },
+
+    zoomSmartExtents: {
+      ...enMain.verticalToolbar.zoomSmartExtents,
+      text: 'ملاءمة ذكية',
+      description: 'التكبير إلى مجموعة الهندسة الرئيسية مع تجاهل العناصر البعيدة الشاذة'
     },
 
     zoomToBox: {
       ...enMain.verticalToolbar.zoomToBox,
-      text: 'تكبير نافذة',
+      text: 'نافذة',
       description: 'تكبير منطقة محددة بواسطة نافذة مستطيلة'
     }
   },
@@ -1476,8 +1495,13 @@ export default {
     failedToOpenFile:
       'فشل فتح الملف "{fileName}"!',
 
+    failedToOpenFileToast:
+      'فشل فتح "{fileName}". راجع مركز الإشعارات للتفاصيل.',
+
     failedToOpenFileWorkerOom:
-      'فشل فتح "{fileName}". الرسم كبير جدًا بالنسبة للذاكرة المتاحة.',
+      'فشل فتح "{fileName}". فشل التحليل بسبب نفاد الذاكرة المتاحة (محلل LibreDWG). يمكنك النقر على {dwgParserLink} لشراء محلل DWG التجاري وفتح الرسومات الكبيرة دون حدوث هذا الانهيار.',
+
+    failedToOpenFileWorkerOomLink: 'هذه الصفحة',
 
     failedToOpenFileWorkerTimeout:
       'فشل فتح "{fileName}". انتهت مهلة العملية أثناء تحليل الرسم.',
@@ -1528,7 +1552,7 @@ export default {
       ...enMain.notification.title,
 
       failedToOpenFile: 'فشل فتح الملف',
-      failedToOpenFileWorkerOom: 'الرسم كبير جدًا',
+      failedToOpenFileWorkerOom: 'نفاد الذاكرة',
       failedToOpenFileWorkerTimeout: 'انتهت مهلة فتح الرسم',
       failedToOpenFileFontLoadFailed: 'فشل تحميل الخطوط',
       failedToOpenFileLicenseExpired: 'انتهت صلاحية الترخيص',
