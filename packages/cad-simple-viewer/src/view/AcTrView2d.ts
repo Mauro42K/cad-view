@@ -34,7 +34,8 @@ import {
   AcTrMTextRenderer,
   AcTrRenderer,
   AcTrViewportView,
-  hasPendingComplexLineTypeGlyphs
+  hasPendingComplexLineTypeGlyphs,
+  setAcTrDrawOrderZAllocator
 } from '@mlightcad/three-renderer'
 import { AcTrMatrixUtil } from '@mlightcad/three-renderer'
 import * as THREE from 'three'
@@ -415,6 +416,9 @@ export class AcTrView2d extends AcEdBaseView {
     renderer.setSize(this.width, this.height)
 
     this._renderer = new AcTrRenderer(renderer)
+    // Shared across all layer batched groups so later entities (e.g. wipeouts)
+    // occlude earlier linework via depth, matching AutoCAD draw order.
+    setAcTrDrawOrderZAllocator(() => this._renderer.allocateDrawOrderZ())
     const fontMapping = AcApSettingManager.instance.fontMapping
     this._renderer.setFontMapping(fontMapping)
     this._renderer.events.fontNotFound.addEventListener(args => {
@@ -1098,6 +1102,9 @@ export class AcTrView2d extends AcEdBaseView {
     this._scene.repaintForegroundMaterials(
       acgiForegroundColorForBackground(value)
     )
+    // Wipeouts track the canvas background (isBackgroundFill); repaint their
+    // batch-owned clones the same way as ACI-7 foreground materials.
+    this._scene.repaintBackgroundMaterials(value)
     this.resyncForegroundLayersForBackground()
     if (this._readingMode.isEnabled) {
       this._readingMode.noteLayoutBackground(value)
@@ -1539,7 +1546,7 @@ export class AcTrView2d extends AcEdBaseView {
           this.endProgressiveOpenFit()
           return
         }
-        this._progressiveOpenFit.applyFinalFit(() => this.resolveLayoutFitBox())
+        this._progressiveOpenFit.applyFinalFit(() => this.getDrawingExtents())
         this.endProgressiveOpenFit()
         const originalBtrId = layoutBtrId ?? this.activeLayoutBtrId
         if (originalBtrId) {
@@ -1583,7 +1590,7 @@ export class AcTrView2d extends AcEdBaseView {
           this.endProgressiveOpenFit()
           return
         }
-        this._progressiveOpenFit.applyFinalFit(() => this.resolveLayoutFitBox())
+        this._progressiveOpenFit.applyFinalFit(() => this.getDrawingExtents())
         this.endProgressiveOpenFit()
       },
       300,
@@ -2307,10 +2314,14 @@ export class AcTrView2d extends AcEdBaseView {
   }
 
   /**
-   * Resolves the 2D box to frame for the active layout once entities are
-   * converted. Uses {@link AcTrScene.box}, which is derived from batch geometry.
+   * Returns the 2D box of drawable geometry in the active layout.
+   *
+   * Uses {@link AcTrScene.box}, which is derived from batch geometry — not
+   * database header `EXTMIN`/`EXTMAX`, which are often stale on real DWGs.
+   *
+   * @inheritdoc
    */
-  private resolveLayoutFitBox(): AcGeBox2d | undefined {
+  getDrawingExtents(): AcGeBox2d | undefined {
     const sceneBox = this._scene.box
     if (sceneBox && !sceneBox.isEmpty()) {
       return AcTrGeometryUtil.threeBox3dToGeBox2d(sceneBox)
@@ -2339,7 +2350,7 @@ export class AcTrView2d extends AcEdBaseView {
    *    populated. Many parsers leave this empty (we've seen `(0,0)-(0,0)`),
    *    so it sits below the viewport-based heuristic.
    *
-   * 4. **`resolveLayoutFitBox`** (entity extents from batch geometry) —
+   * 4. **`getDrawingExtents`** (entity extents from batch geometry) —
    *    last-resort fallback for layouts with no viewports and no
    *    sensible limits/extents (e.g. a freshly created empty paper).
    *    Vulnerable to scale-mismatch outliers, but better than no zoom.
@@ -2391,7 +2402,7 @@ export class AcTrView2d extends AcEdBaseView {
             )
           )
         } else {
-          const box = this.resolveLayoutFitBox()
+          const box = this.getDrawingExtents()
           if (box) {
             this.zoomTo(box)
           }
@@ -2421,6 +2432,7 @@ export class AcTrView2d extends AcEdBaseView {
     this.resetDeferredGeometryQueue()
     this._entityProcessingIdleAt = 0
     this._scene.clear()
+    this._renderer.resetDrawOrderZ()
     this._isDirty = true
     this._missedImages.clear()
     this._initializedLayouts.clear()
@@ -3010,7 +3022,22 @@ export class AcTrView2d extends AcEdBaseView {
     this._textStyleFontPreloadEpoch = epoch
     let names: string[] = []
     try {
-      names = database.tables.textStyleTable.fonts ?? []
+      const table = database.tables.textStyleTable
+      names = [...(table.fonts ?? [])]
+      // `fonts` is DXF group 3/4 file names only. TrueType styles store the
+      // face on `font` / `extendedFont` (仿宋, SimHei).
+      if (table.newIterator) {
+        for (const record of table.newIterator()) {
+          const style = record.textStyle as {
+            font?: string
+            bigFont?: string
+            extendedFont?: string
+          }
+          if (style?.font) names.push(style.font)
+          if (style?.bigFont) names.push(style.bigFont)
+          if (style?.extendedFont) names.push(style.extendedFont)
+        }
+      }
     } catch {
       names = []
     }
@@ -3026,13 +3053,29 @@ export class AcTrView2d extends AcEdBaseView {
       return
     }
     const mtextRenderer = AcTrMTextRenderer.getInstance()
-    this._textStyleFontPreloadPromise = Promise.all([
+    // Same deadline as AcApDocManager.installFontFileLoadTimeout. Covers both
+    // main-thread requestFonts and worker-pool loadFonts so a stalled CDN
+    // cannot pin deferred glyph jobs / the open overlay indefinitely.
+    const preloadTimeoutMs = 30_000
+    const preload = Promise.all([
       FontManager.instance.requestFonts(preloadNames),
       // Worker isolates have their own FontManager; main-thread requestFonts
       // alone does not populate them before asyncRenderMText.
       mtextRenderer.loadFonts(fallbackFonts)
+    ])
+    this._textStyleFontPreloadPromise = Promise.race([
+      preload,
+      new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(
+            new Error(
+              `Text-style font preload timed out after ${preloadTimeoutMs}ms`
+            )
+          )
+        }, preloadTimeoutMs)
+      })
     ]).then(
-      () => {},
+      () => undefined,
       () => {
         // Glyph draw still falls back via FontManager defaults / '?'.
       }
@@ -3479,7 +3522,7 @@ export class AcTrView2d extends AcEdBaseView {
                 if (progressive) {
                   this.markProgressiveDirty()
                   this._progressiveOpenFit.afterGeometryBatch(
-                    () => this.resolveLayoutFitBox(),
+                    () => this.getDrawingExtents(),
                     i
                   )
                 }
@@ -3578,7 +3621,7 @@ export class AcTrView2d extends AcEdBaseView {
               if (progressive) {
                 this.markProgressiveDirty()
                 this._progressiveOpenFit.afterGeometryBatch(
-                  () => this.resolveLayoutFitBox(),
+                  () => this.getDrawingExtents(),
                   i
                 )
               }
@@ -3823,7 +3866,7 @@ export class AcTrView2d extends AcEdBaseView {
     if (progressive) {
       this.markProgressiveDirty()
       this._progressiveOpenFit.afterGeometryBatch(() =>
-        this.resolveLayoutFitBox()
+        this.getDrawingExtents()
       )
     }
   }
@@ -3855,7 +3898,7 @@ export class AcTrView2d extends AcEdBaseView {
     if (!this._openLineworkFramePending || this.isConvertingEntities) {
       return
     }
-    const box = this.resolveLayoutFitBox()
+    const box = this.getDrawingExtents()
     if (!box || box.isEmpty()) {
       this._openLineworkFramePending = false
       return
