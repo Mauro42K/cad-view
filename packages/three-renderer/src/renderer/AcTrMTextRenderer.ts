@@ -1,3 +1,4 @@
+import { AcCmColor } from '@mlightcad/data-model'
 import {
   ColorSettings,
   createDefaultColorSettings,
@@ -30,10 +31,16 @@ class AcTrMTextStyleManager implements StyleManager {
       traits,
       this._styleManager.currentBackgroundColor
     )
+    const { layerColor, layerColorRgb } = this.resolveLayerSwatch(traits)
     // Route MText glyph fills through the dedicated helper so their
     // linework-tier `drawOrder` semantics stay explicit even though
     // they are rasterized as meshes.
-    return this._styleManager.getMTextFillMaterial(entityTraits)
+    return this._styleManager.getMTextFillMaterial(
+      entityTraits,
+      undefined,
+      layerColor,
+      layerColorRgb
+    )
   }
 
   getLineBasicMaterial(traits: ColorSettings): THREE.Material {
@@ -41,7 +48,37 @@ class AcTrMTextStyleManager implements StyleManager {
       traits,
       this._styleManager.currentBackgroundColor
     )
-    return this._styleManager.getLineMaterial(entityTraits, true)
+    const { layerColor, layerColorRgb } = this.resolveLayerSwatch(traits)
+    return this._styleManager.getLineMaterial(
+      entityTraits,
+      true,
+      undefined,
+      layerColor,
+      layerColorRgb
+    )
+  }
+
+  /**
+   * Inline `\C256` / entity ByLayer carry the resolved layer swatch on
+   * {@link ColorSettings.byLayerColor}. Pass it into material *creation*
+   * so ByLayer glyphs are not born white — never mutate a shared cached
+   * material after the fact (that recolours unrelated glyphs).
+   */
+  private resolveLayerSwatch(traits: ColorSettings): {
+    layerColor?: AcCmColor
+    layerColorRgb?: number
+  } {
+    if (traits.color.aci !== 256) {
+      return {}
+    }
+    const rgb = traits.byLayerColor
+    if (typeof rgb !== 'number') {
+      return {}
+    }
+    return {
+      layerColor: new AcCmColor().setRGBValue(rgb),
+      layerColorRgb: rgb
+    }
   }
 }
 
