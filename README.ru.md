@@ -17,6 +17,7 @@ cad-viewer — `первый в мире веб-просмотрщик и ред
 - X (Twitter): [@mlightcad](https://x.com/mlightcad)
 - YouTube: [@mlightcad](https://www.youtube.com/@mlightcad)
 - Medium: [@mlightcad](https://medium.com/@mlightcad)
+- DEV.to: [@mlightcad](https://dev.to/mlightcad)
 - Juejin(稀土掘金): [@mlightcad](https://juejin.cn/column/7501992214283501579)
 
 ### Приложения на базе cad-viewer
@@ -431,7 +432,7 @@ CAD-Viewer спроектирован для **исключительной пр
 
 ### Целевые платформы
 
-* [ ] ⏳ Интеграция с Google Drive
+* [x] Интеграция с Google Drive (источник данных Picker; Drive “Open with” — опциональное продолжение)
 * [ ] Просмотрщик для WeChat Mini Program
 * [x] Поддержка мобильного браузера (адаптивная вёрстка и сенсорное управление)
 
