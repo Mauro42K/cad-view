@@ -40,6 +40,7 @@ import {
   getCurrentDemoToolbarLayoutId
 } from './demoToolbarPresets'
 import { setupFileSidebarResize } from './fileSidebarResize'
+import { getGoogleDriveEnvConfig } from './googleDriveEnv'
 import { getOneDriveEnvConfig } from './onedriveEnv'
 import { registerLazyPlugins } from './register'
 import { registerLibreDwgConverter } from './registerLibreDwg'
@@ -229,11 +230,9 @@ class CadViewerApp {
 
     this.setupFileHandling()
     this.setupFileOpenPanel()
-    if (getOneDriveEnvConfig()) {
-      void this.initialize().then(() => {
-        this.fileOpenPanel?.refreshSourceButtons()
-      })
-    }
+    // Defer AcApDocManager / simple-ui creation until the user opens or creates
+    // a drawing (or signs in to a cloud source). Eager init showed the blank
+    // viewer chrome under the transparent landing panel.
     this.setupPredefinedFileActions()
     this.setupMobileSidebar()
     const fileSidebarResizeHandle = document.getElementById(
@@ -857,12 +856,50 @@ class CadViewerApp {
     this.documentEventsRegistered = true
   }
 
+  /**
+   * Whether viewer chrome (toolbar / command line) should be shown.
+   * Hidden on the landing panel; shown once a drawing is open or being opened.
+   */
+  private shouldShowViewerChrome(): boolean {
+    return this.hasOpenedFile || this.isLoadingFile
+  }
+
+  /** Shows or hides viewer chrome without persisting those preferences. */
+  private setViewerChromeVisible(visible: boolean) {
+    if (visible) {
+      AcApSettingManager.instance.clearSessionOverride('isShowCommandLine')
+      AcApSettingManager.instance.clearSessionOverride('isShowShortCutToolbar')
+    } else {
+      AcApSettingManager.instance.apply(
+        {
+          isShowCommandLine: false,
+          isShowShortCutToolbar: false
+        },
+        { persist: false }
+      )
+    }
+    this.getSimpleUiPlugin()?.setToolbarVisible(visible)
+  }
+
   private async initialize() {
     if (this.isInitialized) return
 
     try {
       acedApplyUiTheme('dark', document.documentElement)
       acedApplyUiTheme('dark', this.viewerPane)
+
+      const showChrome = this.shouldShowViewerChrome()
+      // Hide command line / shortcut toolbar before createInstance mounts them,
+      // so cloud sign-in (init without opening a file) does not flash chrome.
+      if (!showChrome) {
+        AcApSettingManager.instance.apply(
+          {
+            isShowCommandLine: false,
+            isShowShortCutToolbar: false
+          },
+          { persist: false }
+        )
+      }
 
       const openProf = isOpenProfMode()
       // Prefer main-thread MTEXT by default (less peak memory). Pass `?worker=1`
@@ -935,6 +972,9 @@ class CadViewerApp {
       setupAgentIntegration(plugin)
 
       this.isInitialized = true
+      if (!showChrome) {
+        this.setViewerChromeVisible(false)
+      }
       this.updateDevToolbarLabels()
     } catch (error) {
       log.error('Failed to initialize CAD viewer:', error)
@@ -954,11 +994,11 @@ class CadViewerApp {
   }
 
   private buildLandingCloudMenuItems(): AcApDataSourceMenuItem[] {
-    if (!getOneDriveEnvConfig()) return []
-    const name = AcApI18n.t('main.dataSource.onedrive')
     const signInTemplate = AcApI18n.t('main.dataSource.signInTo')
-    return [
-      {
+    const items: AcApDataSourceMenuItem[] = []
+    if (getOneDriveEnvConfig()) {
+      const name = AcApI18n.t('main.dataSource.onedrive')
+      items.push({
         id: 'onedrive:sign-in',
         sourceId: 'onedrive',
         action: 'sign-in',
@@ -967,8 +1007,22 @@ class CadViewerApp {
         label: signInTemplate.includes('{name}')
           ? signInTemplate.split('{name}').join(name)
           : `Sign in to ${name}`
-      }
-    ]
+      })
+    }
+    if (getGoogleDriveEnvConfig()) {
+      const name = AcApI18n.t('main.dataSource.googledrive')
+      items.push({
+        id: 'googledrive:sign-in',
+        sourceId: 'googledrive',
+        action: 'sign-in',
+        labelKey: 'main.dataSource.signInTo',
+        labelParams: { name },
+        label: signInTemplate.includes('{name}')
+          ? signInTemplate.split('{name}').join(name)
+          : `Sign in to ${name}`
+      })
+    }
+    return items
   }
 
   private setupFileOpenPanel() {
@@ -1277,17 +1331,22 @@ class CadViewerApp {
 
   private onFileOpened() {
     this.hasOpenedFile = true
+    this.setViewerChromeVisible(true)
     this.updateEmptyStateVisibility()
     this.updateDevToolbarLabels()
   }
 
   private setLoadingState(loading: boolean) {
     this.isLoadingFile = loading
+    // Keep chrome in sync when loading starts after a deferred init that hid it
+    // (e.g. OneDrive sign-in without opening a file).
+    this.setViewerChromeVisible(this.shouldShowViewerChrome())
     this.updateEmptyStateVisibility()
   }
 
   private finishLoadingState() {
     this.isLoadingFile = false
+    this.setViewerChromeVisible(this.shouldShowViewerChrome())
     this.updateEmptyStateVisibility()
   }
 

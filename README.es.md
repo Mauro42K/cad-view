@@ -17,6 +17,7 @@ También ofrece algo que rara vez encontrará en otros visores CAD: **exportaci�
 - X (Twitter): [@mlightcad](https://x.com/mlightcad)
 - YouTube: [@mlightcad](https://www.youtube.com/@mlightcad)
 - Medium: [@mlightcad](https://medium.com/@mlightcad)
+- DEV.to: [@mlightcad](https://dev.to/mlightcad)
 - Juejin(稀土掘金): [@mlightcad](https://juejin.cn/column/7501992214283501579)
 
 ### Aplicaciones creadas con cad-viewer
@@ -431,7 +432,7 @@ Leyenda:
 
 ### Plataformas objetivo
 
-* [ ] ⏳ Integración con Google Drive
+* [x] Integración con Google Drive (origen de datos Picker; Drive “Open with” como seguimiento opcional)
 * [ ] Visor de Mini Program de WeChat
 * [x] Soporte de navegador móvil (diseño responsive y gestos táctiles)
 

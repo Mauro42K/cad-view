@@ -17,6 +17,7 @@ DWG/DXF の解析、ジオメトリ処理、レンダリングをすべてブラ
 - X (Twitter): [@mlightcad](https://x.com/mlightcad)
 - YouTube: [@mlightcad](https://www.youtube.com/@mlightcad)
 - Medium: [@mlightcad](https://medium.com/@mlightcad)
+- DEV.to: [@mlightcad](https://dev.to/mlightcad)
 - Juejin(稀土掘金): [@mlightcad](https://juejin.cn/column/7501992214283501579)
 
 ### cad-viewer で構築されたアプリ
@@ -431,7 +432,7 @@ CAD-Viewer は **卓越したパフォーマンス** 向けに設計されてお
 
 ### プラットフォーム目標
 
-* [ ] ⏳ Google Drive 連携
+* [x] Google Drive 連携（Picker データソース；Drive “Open with” は任意のフォローアップ）
 * [ ] WeChat Mini Program ビューア
 * [x] モバイルブラウザサポート（レスポンシブレイアウトとタッチ操作）
 

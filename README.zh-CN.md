@@ -17,6 +17,7 @@ CAD-Viewer 是`全球首个完全运行在浏览器端、无需依赖任何后�
 - X (Twitter): [@mlightcad](https://x.com/mlightcad)
 - YouTube: [@mlightcad](https://www.youtube.com/@mlightcad)
 - Medium: [@mlightcad](https://medium.com/@mlightcad)
+- DEV.to: [@mlightcad](https://dev.to/mlightcad)
 - 稀土掘金: [@mlightcad](https://juejin.cn/column/7501992214283501579)
 
 ### 基于 cad-viewer 构建的应用（Apps Built with cad-viewer）
@@ -431,7 +432,7 @@ CAD-Viewer 针对复杂图纸渲染进行了多项优化，可在保持高帧率
 
 ### 平台目标
 
--   [ ] ⏳ Google Drive 集成
+-   [x] Google Drive 集成（Picker 数据源；Drive “Open with” 为可选后续）
 -   [ ] 微信小程序查看器
 -   [x] 移动端浏览器支持（响应式布局与触控）
 
