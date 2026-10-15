@@ -1,20 +1,51 @@
-# Mantenimiento downstream
+# Mantenimiento del espejo estable
 
-CAD View es una copia downstream del repositorio `mlightcad/cad-viewer`.
+CAD View es un espejo de mantenimiento de `mlightcad/cad-viewer`, con seis excepciones locales de infraestructura. Upstream es la única fuente de código funcional, dependencias, versiones, arquitectura y ejemplos. No se desarrolla una variante del producto ni se aplican parches funcionales propios.
 
-- Upstream posee el código de producto, las dependencias, las versiones y la dirección técnica; su árbol limpio es la línea base para validar cada sincronización.
-- Los cambios locales se limitan a gobernanza privada, validación, configuración Vercel y metadatos estrictamente necesarios.
-- `.github/workflows/upstream-sync.yml` comprueba upstream automáticamente cada día y también admite ejecución manual.
-- Un nuevo commit upstream no actualiza `main`: sólo un candidato saludable produce o actualiza una PR de sincronización.
-- Cada candidato se reconstruye desde el `origin/main` actual; `chore/upstream-sync` es una rama descartable de automatización, no una segunda rama de producto de larga duración.
-- La salud upstream (sus propios gates limpios) es distinta de la sincronizabilidad (integración con downstream). Antes de la primera paridad las historias pueden no tener ancestry común; un upstream saludable se reporta para una reconciliación manual deliberada. Después de establecer ancestry común, las actualizaciones saludables normalmente producen PRs automáticas.
-- Las PR de sincronización usan **merge normal**, nunca squash ni rebase, para conservar la ancestry real de upstream.
-- La protección de `main` y sus required checks siguen siendo la barrera final. Una PR saludable puede registrar auto-merge normal y GitHub sólo la integra cuando los gates obligatorios quedan satisfechos.
-- Si el upstream limpio falla su propia validación relevante, la sincronización se detiene y no se abre una PR que atribuya la falla al downstream.
-- Las actualizaciones rutinarias de versiones de Dependabot se evitan. Las alertas de seguridad de GitHub permanecen disponibles; una excepción urgente puede divergir temporalmente, debe documentarse y eliminarse cuando upstream se ponga al día.
-- Findings de seguridad ubicados exclusivamente en archivos propiedad de upstream se heredan mientras exista paridad exacta; no se parchean downstream sólo para satisfacer un comentario de PR.
+## Fuente y selección de versiones
 
-La delta local vigente debe permanecer pequeña, explícita y fácil de reconciliar en el siguiente PR upstream.
+El workflow `upstream-sync.yml` consulta diariamente y mediante ejecución manual todas las páginas de releases oficiales del repositorio upstream. Selecciona la mayor versión elegible por orden SemVer numérico, no por fecha de publicación:
+
+- Release publicada (`published_at` presente), sin `draft` ni `prerelease`.
+- Tag final `vX.Y.Z` o `X.Y.Z`, sin sufijos, previews, RC ni metadatos de versión.
+- Tag resuelto recursivamente hasta un commit real; el objeto del tag y el SHA descargados deben coincidir con GitHub. La versión de `packages/cad-viewer/package.json` debe coincidir con el tag.
+- Commit contenido en el historial de `upstream/main` y descendiente del último baseline upstream integrado.
+- Versión no inferior a la del paquete integrado y commit todavía no integrado.
+
+`upstream/main` sólo sirve para comprobar ascendencia; nunca se fusiona directamente. Los tags sin release oficial tampoco son elegibles. La ausencia de una release elegible termina correctamente el ciclo sin cambios ni PR: no es una avería de la automatización.
+
+## Paridad y transición sin retrocesos
+
+El baseline se obtiene del ancestro común de `origin/main` y `upstream/main`. Antes de seleccionar se comprueba que el producto actual coincide con ese baseline fuera de las seis excepciones. Después de una adopción, el baseline es el commit publicado de la release integrada. El SHA del merge downstream será diferente porque conserva su historial e infraestructura.
+
+Al introducir esta política, el baseline integrado es `aff4c22423818e53d82cc731d195b62570af1fb8`: contiene `v1.7.5` y commits posteriores a esa release. El paquete indica `1.7.5`, pero el árbol todavía no corresponde exactamente al tag `v1.7.5`. No se retrocede a ese tag: se espera una release estable que incluya todo el baseline. Este dato describe la transición inicial, no requiere editar documentación en cada publicación; los resúmenes de Actions y las PR registran la release y el SHA seleccionados.
+
+La paridad funcional se mide contra la release adoptada, no contra el último commit de upstream/main. Estar detrás de main durante el desarrollo de una versión es intencionado. La PR upstream #766 no se copia ni se aplica directamente: sólo se recibe cuando una release estable elegible incluya su corrección aceptada.
+
+## Ciclo de sincronización y auto-merge
+
+1. Seleccionar y verificar una release elegible, su versión, tag y ascendencia.
+2. Validar el upstream limpio con instalación congelada, lint, build y tests. Si falla, detenerse sin reparar upstream downstream.
+3. Reconstruir `chore/upstream-sync` desde el main downstream actual y fusionar sólo el SHA verificado mediante merge normal, sin squash ni rebase.
+4. Conservar los seis archivos locales autorizados. Resolver automáticamente sólo sus conflictos; cualquier conflicto funcional detiene el ciclo. Exigir paridad exacta del resto del árbol y validar el candidato.
+5. Reconsultar la release, resolver de nuevo el tag y verificar que main no cambió durante la validación. Si cambió la base o desapareció/cambió la publicación, no publicar el candidato.
+6. Crear o actualizar una única PR. El auto-merge nativo usa exclusivamente MERGE y queda sujeto a todas las protecciones de GitHub.
+
+Checks obligatorios de main: `release-policy`, `build`, `Analyze (javascript-typescript)`, `Analyze (actions)` y `Vercel`. La CI mantiene E2E y comprueba además que una PR de `chore/upstream-sync` fusiona una release actualmente elegible desde la base vigente y conserva paridad funcional. La protección nativa de resultados CodeQL debe estar activa en main, sin actores de bypass, bloqueando errores y alertas de seguridad altas/críticas; que el job de análisis termine correctamente no basta si detectó una alerta bloqueante.
+
+El workflow valida la política de selección en CI mediante escenarios positivos y negativos, incluidos versiones inferiores, previews, drafts, tags movidos y la preservación de commits postrelease. La protección de main exige esos resultados también al bot. No se fuerza main ni se debilitan controles para completar un ciclo.
+
+## Vulnerabilidades heredadas y releases defectuosas
+
+Las alertas heredadas de upstream permanecen abiertas y visibles. No se descartan, silencian ni se reducen umbrales para integrar una release. Se informa a upstream y se espera una release estable corregida cuando un hallazgo bloquea la sincronización. Una corrección pendiente en main upstream todavía no autoriza su aplicación downstream.
+
+Si una release falla instalación, lint, build, tests, E2E, CodeQL, Vercel, procedencia o paridad, no se integra; se conserva el despliegue anterior. Se documenta la evidencia y se espera una nueva release oficial. No se retoca el código, las dependencias, el lockfile o los tests upstream para convertir el fallo en verde.
+
+Si un defecto se descubre después de integrar una release, desactivar su auto-merge pendiente y pausar el workflow mientras se diagnostica. Registrar el tag/SHA, informar a upstream y esperar una release estable posterior que conserve la ascendencia. Una restauración excepcional de Vercel o cualquier rollback requiere decisión explícita y validación; el sincronizador nunca hace downgrades automáticos ni modifica la historia de main. Después de corregir la causa y comprobar los controles, reactivar el workflow. Cerrar con motivo las PR obsoletas y conservar sus ramas hasta evaluar su contenido y autorizar su limpieza.
+
+## Despliegue
+
+Vercel conserva `pnpm build` y `packages/cad-viewer-example/dist`. Esta política no cambia el código ni los parámetros de despliegue. Cada PR debe aprobar Vercel y el despliegue de main debe verificarse después de integrar infraestructura o una release.
 
 ## Autenticación de la sincronización
 
@@ -38,17 +69,13 @@ El antiguo secret `UPSTREAM_SYNC_TOKEN` basado en PAT es legado y debe eliminars
 
 ## Allowlist de infraestructura downstream
 
-La comparación de paridad contra `upstream/main` debe mostrar únicamente estos
-seis archivos locales:
+Sólo estos seis archivos pueden diferir del upstream adoptado:
 
-- `.github/workflows/ci.yml`: controles CI downstream con permisos mínimos, pins
-  inmutables y verificaciones de ancestry.
-- `.github/workflows/upstream-sync.yml`: validación y creación de candidatos de
-  sincronización.
-- `AGENTS.md`: control plane y límites operativos de este mirror.
-- `docs/DEPENDENCY_POLICY.md`: política downstream de dependencias.
-- `docs/DOWNSTREAM_MAINTENANCE.md`: procedimiento y allowlist de mantenimiento.
-- `vercel.json`: configuración downstream de build y salida de Vercel.
+- `.github/workflows/ci.yml`: CI, pruebas de política y procedencia de releases.
+- `.github/workflows/upstream-sync.yml`: selección, validación y sincronización.
+- `AGENTS.md`: límites operativos locales.
+- `docs/DEPENDENCY_POLICY.md`: política de dependencias heredadas.
+- `docs/DOWNSTREAM_MAINTENANCE.md`: procedimiento de mantenimiento.
+- `vercel.json`: configuración de build y salida de Vercel.
 
-Cualquier otro archivo divergente frente al upstream requiere una decisión y
-documentación explícitas antes de aceptarse.
+Cualquier diferencia fuera de esta lista bloquea la automatización. El código funcional, manifiestos de paquetes y lockfile pertenecen exclusivamente a upstream.

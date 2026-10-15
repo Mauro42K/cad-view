@@ -12,6 +12,264 @@ permissions:
   contents: read
 
 jobs:
+  release-policy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Test stable release selection and tag verification
+        run: |
+          python3 - <<'PYTHON'
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import tempfile
+          import textwrap
+          import unittest
+          from unittest.mock import patch
+
+          source = Path('.github/workflows/upstream-sync.yml').read_text()
+          code = textwrap.dedent(source.split('# BEGIN STABLE RELEASE POLICY\n', 1)[1]
+                                .split('# END STABLE RELEASE POLICY', 1)[0])
+          policy = {'__name__': 'stable_release_policy'}
+          exec(compile(code, 'stable-release-policy.py', 'exec'), policy)
+
+
+          class ReleasePolicyTests(unittest.TestCase):
+              def setUp(self):
+                  self.release = {'id': 1, 'tag_name': 'v1.7.6', 'draft': False,
+                                  'prerelease': False, 'published_at': '2026-10-16T00:00:00Z'}
+                  self.calls = []
+                  self.parents = {('baseline', 'new'), ('new', 'upstream/main'),
+                                  ('old', 'upstream/main'), ('old', 'current'),
+                                  ('baseline', 'current')}
+
+              def choose(self, releases):
+                  def resolve(tag):
+                      self.calls.append(tag)
+                      return {'v1.7.6': 'new', 'v1.7.5': 'old', 'v1.7.7': 'next'}[tag]
+                  return policy['choose'](releases, (1, 7, 5), 'baseline', 'current',
+                                          resolve, lambda a, b: a == b or (a, b) in self.parents)
+
+              def test_stable_release_produces_candidate(self):
+                  self.assertEqual(self.choose([self.release]), (self.release, 'new'))
+
+              def test_main_without_release_does_nothing(self):
+                  self.assertIsNone(self.choose([]))
+                  self.assertEqual(self.calls, [])
+
+              def test_preview_prerelease_draft_and_unpublished_ignored(self):
+                  for changes in [{'tag_name': 'v1.7.6-preview.0'}, {'tag_name': 'v1.7.6-rc.1'},
+                                  {'tag_name': 'v1.7.6+preview'}, {'prerelease': True},
+                                  {'draft': True}, {'published_at': None}]:
+                      with self.subTest(changes=changes):
+                          self.assertIsNone(self.choose([{**self.release, **changes}]))
+                  self.assertEqual(self.calls, [])
+
+              def test_version_downgrade_rejected_before_resolving(self):
+                  self.assertIsNone(self.choose([{**self.release, 'tag_name': 'v1.7.4'}]))
+                  self.assertEqual(self.calls, [])
+
+              def test_release_must_include_all_integrated_commits(self):
+                  self.parents.remove(('baseline', 'new'))
+                  self.assertIsNone(self.choose([self.release]))
+
+              def test_release_must_be_on_upstream_main(self):
+                  self.parents.remove(('new', 'upstream/main'))
+                  self.assertIsNone(self.choose([self.release]))
+
+              def test_already_adopted_release_is_noop(self):
+                  self.parents.add(('new', 'current'))
+                  self.assertIsNone(self.choose([self.release]))
+
+              def test_latest_eligible_version_wins_not_publication_order(self):
+                  self.parents.update({('baseline', 'next'), ('next', 'upstream/main')})
+                  latest = {**self.release, 'tag_name': 'v1.7.7', 'published_at': '2026-10-15T00:00:00Z'}
+                  self.assertEqual(self.choose([self.release, latest]), (latest, 'next'))
+
+              def test_older_release_cannot_roll_back_postrelease_commits(self):
+                  self.assertIsNone(self.choose([{**self.release, 'tag_name': 'v1.7.5'}]))
+
+              def test_invalid_tags_never_reach_git_or_shell(self):
+                  for tag in ['v01.7.6', 'v1.7', 'v1.7.6;echo bad', '../main', 'v1.7.6\n']:
+                      self.assertIsNone(policy['version'](tag))
+
+              def test_annotated_tag_is_peeled_and_verified(self):
+                  def api(path):
+                      if '/git/ref/' in path:
+                          return {'object': {'type': 'tag', 'sha': 'tag-object'}}
+                      return {'object': {'type': 'commit', 'sha': 'commit'}}
+                  with patch.dict(policy, api=api, git=lambda *a: 'commit' if a[-1].endswith('^{commit}') else 'tag-object'):
+                      with patch.object(policy['subprocess'], 'run') as fetch:
+                          self.assertEqual(policy['resolve_tag']('owner/repo', 'v1.7.6'), 'commit')
+                          self.assertEqual(fetch.call_args.args[0][-1], 'refs/tags/v1.7.6')
+
+              def test_moving_tag_is_rejected(self):
+                  with patch.dict(policy, api=lambda p: {'object': {'type': 'commit', 'sha': 'before'}},
+                                  git=lambda *a: 'after'):
+                      with patch.object(policy['subprocess'], 'run'):
+                          with self.assertRaisesRegex(RuntimeError, 'moved'):
+                              policy['resolve_tag']('owner/repo', 'v1.7.6')
+
+              def test_real_git_ancestry_prevents_downgrade(self):
+                  with tempfile.TemporaryDirectory() as directory:
+                      def git(*args):
+                          return subprocess.check_output(['git', '-C', directory, *args], text=True).strip()
+                      git('init', '-q')
+                      git('config', 'user.email', 'policy-test@example.invalid')
+                      git('config', 'user.name', 'Release policy test')
+                      git('commit', '--allow-empty', '-qm', 'published stable')
+                      old = git('rev-parse', 'HEAD')
+                      git('commit', '--allow-empty', '-qm', 'already integrated postrelease commit')
+                      baseline = git('rev-parse', 'HEAD')
+                      git('commit', '--allow-empty', '-qm', 'new stable with all integrated history')
+                      new = git('rev-parse', 'HEAD')
+                      git('branch', 'upstream/main', new)
+                      def ancestor(a, b):
+                          return subprocess.run(['git', '-C', directory, 'merge-base', '--is-ancestor', a, b]).returncode == 0
+                      result = policy['choose']([{**self.release, 'tag_name': 'v1.7.5'}],
+                                                (1, 7, 5), baseline, baseline, lambda t: old, ancestor)
+                      self.assertIsNone(result)
+                      result = policy['choose']([self.release], (1, 7, 5), baseline,
+                                                baseline, lambda t: new, ancestor)
+                      self.assertEqual(result[1], new)
+
+
+              def test_real_candidate_merges_release_not_main_and_preserves_infrastructure(self):
+                  with tempfile.TemporaryDirectory() as directory:
+                      root = Path(directory)
+                      def git(*args):
+                          return subprocess.check_output(['git', '-C', directory, *args], text=True, stderr=subprocess.PIPE).strip()
+                      git('init', '-q')
+                      git('config', 'user.email', 'policy-test@example.invalid')
+                      git('config', 'user.name', 'Release policy test')
+                      allowed = ['.github/workflows/ci.yml', '.github/workflows/upstream-sync.yml',
+                                 'AGENTS.md', 'docs/DEPENDENCY_POLICY.md',
+                                 'docs/DOWNSTREAM_MAINTENANCE.md', 'vercel.json']
+                      for name in allowed + ['viewer.txt']:
+                          path = root / name
+                          path.parent.mkdir(parents=True, exist_ok=True)
+                          path.write_text('original\n')
+                      git('add', '.')
+                      git('commit', '-qm', 'initial stable')
+                      baseline = git('rev-parse', 'HEAD')
+                      (root / 'viewer.txt').write_text('official stable release\n')
+                      (root / allowed[0]).write_text('upstream CI changes\n')
+                      git('commit', '-qam', 'new stable release')
+                      release = git('rev-parse', 'HEAD')
+                      (root / 'viewer.txt').write_text('unreleased main development\n')
+                      git('commit', '-qam', 'unreleased main')
+                      git('branch', 'upstream/main')
+                      git('checkout', '-q', '--detach', baseline)
+                      for name in allowed:
+                          (root / name).write_text('approved local infrastructure\n')
+                      git('commit', '-qam', 'downstream infrastructure')
+                      base = git('rev-parse', 'HEAD')
+                      git('update-ref', 'refs/remotes/origin/main', base)
+                      git('init', '--bare', '-q', str(root / 'origin.git'))
+                      git('remote', 'add', 'origin', str(root / 'origin.git'))
+                      step = source.split('      - name: Rebuild synchronization candidate from current main\n', 1)[1]
+                      script = textwrap.dedent(step.split('        run: |\n', 1)[1].split('      - name:', 1)[0])
+                      env = {**os.environ, 'SYNC_BRANCH': 'chore/upstream-sync',
+                             'UPSTREAM_SHA': release, 'RELEASE_TAG': 'v1.7.6',
+                             'DOWNSTREAM_ALLOWLIST': '\n'.join(allowed),
+                             'GITHUB_OUTPUT': str(root / 'output')}
+                      subprocess.run(['bash', '-euo', 'pipefail', '-c', script], cwd=root,
+                                     env=env, check=True, capture_output=True, text=True)
+                      self.assertEqual(git('rev-parse', 'HEAD^1'), base)
+                      self.assertEqual(git('rev-parse', 'HEAD^2'), release)
+                      self.assertEqual((root / 'viewer.txt').read_text(), 'official stable release\n')
+                      for name in allowed:
+                          self.assertEqual((root / name).read_text(), 'approved local infrastructure\n')
+                      self.assertEqual(git('diff', '--no-renames', '--name-only', release, 'HEAD').splitlines(), allowed)
+                      self.assertIn('changed=true', (root / 'output').read_text())
+
+              def run_main(self, releases, product_version='1.7.6', changed=''):
+                  with tempfile.TemporaryDirectory() as directory:
+                      def git(*args):
+                          if args[0] == 'rev-parse': return 'current'
+                          if args[0] == 'merge-base': return 'baseline'
+                          if args[0] == 'diff': return changed
+                          return json.dumps({'version': '1.7.5' if args[1].startswith('baseline:') else product_version})
+                      env = {'UPSTREAM_REPOSITORY': 'owner/repo', 'DOWNSTREAM_ALLOWLIST': 'AGENTS.md',
+                             'RUNNER_TEMP': directory, 'GITHUB_OUTPUT': directory + '/output',
+                             'GITHUB_STEP_SUMMARY': directory + '/summary'}
+                      with patch.dict(os.environ, env), patch.dict(policy, git=git,
+                              resolve_tag=lambda r, t: 'new',
+                              ancestor=lambda a, b: (a, b) in self.parents):
+                          with patch.object(policy['subprocess'], 'check_output', return_value=json.dumps([releases])):
+                              policy['main']()
+                      return Path(directory + '/output').read_text()
+
+              def test_full_selection_no_release_is_safe_noop(self):
+                  self.assertIn('eligible=false', self.run_main([]))
+
+              def test_full_selection_emits_verified_release(self):
+                  output = self.run_main([self.release])
+                  self.assertIn('eligible=true', output)
+                  self.assertIn('release_tag=v1.7.6', output)
+                  self.assertIn('upstream_sha=new', output)
+
+              def test_mislabeled_product_version_blocks_release(self):
+                  with self.assertRaisesRegex(RuntimeError, 'does not match'):
+                      self.run_main([self.release], product_version='1.7.6-preview.0')
+
+              def test_existing_functional_drift_blocks_selection(self):
+                  with self.assertRaisesRegex(RuntimeError, 'outside the allowlist'):
+                      self.run_main([self.release], changed='packages/viewer.ts')
+
+
+          unittest.main(argv=['release-policy'], exit=True)
+          PYTHON
+
+      - name: Verify synchronization PR provenance and functional parity
+        if: github.event_name == 'pull_request' && github.head_ref == 'chore/upstream-sync'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPSTREAM_REPOSITORY: mlightcad/cad-viewer
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          DOWNSTREAM_ALLOWLIST: |-
+            .github/workflows/ci.yml
+            .github/workflows/upstream-sync.yml
+            AGENTS.md
+            docs/DEPENDENCY_POLICY.md
+            docs/DOWNSTREAM_MAINTENANCE.md
+            vercel.json
+        run: |
+          git remote add upstream "https://github.com/${UPSTREAM_REPOSITORY}.git"
+          git fetch --no-tags upstream main
+          git fetch --no-tags origin main
+          python3 - <<'PYTHON'
+          import os
+          from pathlib import Path
+          import textwrap
+          source = Path('.github/workflows/upstream-sync.yml').read_text()
+          code = textwrap.dedent(source.split('# BEGIN STABLE RELEASE POLICY\n', 1)[1]
+                                .split('# END STABLE RELEASE POLICY', 1)[0])
+          policy = {'__name__': 'stable_release_policy'}
+          exec(compile(code, 'stable-release-policy.py', 'exec'), policy)
+          output = Path(os.environ['RUNNER_TEMP']) / 'release-selection-output'
+          os.environ['GITHUB_OUTPUT'] = str(output)
+          policy['main']()
+          selected = dict(line.split('=', 1) for line in output.read_text().splitlines())
+          if selected['eligible'] != 'true':
+              raise RuntimeError('Sync PR has no eligible official stable release')
+          head = os.environ['PR_HEAD_SHA']
+          parents = policy['git']('rev-list', '--parents', '-n', '1', head).split()
+          if len(parents) != 3 or parents[1] != selected['base_sha'] or parents[2] != selected['upstream_sha']:
+              raise RuntimeError('Sync PR must merge the verified stable release into current main')
+          changed = set(policy['git']('diff', '--no-renames', '--name-only', selected['upstream_sha'], head).splitlines())
+          if changed - set(os.environ['DOWNSTREAM_ALLOWLIST'].splitlines()):
+              raise RuntimeError('Sync PR changes product files outside the allowlist')
+          PYTHON
+
   build:
     runs-on: ubuntu-latest
     permissions:

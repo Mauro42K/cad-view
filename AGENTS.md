@@ -3,7 +3,7 @@
 Este archivo es el control plane local y autosuficiente de CAD View: no requiere
 un estándar remoto, tag, URL ni metadatos de procedencia.
 
-CAD View es un downstream del repositorio [`mlightcad/cad-viewer`](https://github.com/mlightcad/cad-viewer). Upstream es la fuente de verdad para el producto, la arquitectura, las dependencias, tooling, funcionalidades y ejemplos; su árbol limpio es también la línea base para validar sincronizaciones.
+CAD View es un downstream del repositorio [`mlightcad/cad-viewer`](https://github.com/mlightcad/cad-viewer). Upstream es la fuente de verdad para el producto, la arquitectura, las dependencias, tooling, funcionalidades y ejemplos; el árbol limpio de la release estable oficial elegible es la línea base para validar sincronizaciones.
 
 Si el upstream limpio falla su propia validación relevante, la sincronización downstream debe detenerse de forma segura. No se debe reparar automáticamente esa falla downstream salvo un requisito urgente y documentado.
 
@@ -55,7 +55,13 @@ repetir indefinidamente ni presentar historia como estado actual. `PASS` exige
 gates obligatorios satisfechos, documentación consistente y ningún hallazgo
 relevante; `NEEDS REVISION` indica un hallazgo corregible dentro del alcance.
 
-`.github/workflows/upstream-sync.yml` comprueba upstream automáticamente cada día y mediante ejecución manual. Primero valida upstream limpio; sólo después intenta sincronizar. Un nuevo commit upstream no actualiza `main`: sólo un candidato que pase la línea base y sea integrable produce o actualiza una PR. Si upstream avanza durante o después de la verificación post-merge, no se clasifica el estado como `BLOCKED` únicamente por ese motivo: el ciclo correctamente integrado se considera cerrado y el nuevo SHA upstream inicia un nuevo ciclo normal de sincronización. La salud upstream es distinta de la sincronizabilidad; antes de la primera paridad las historias pueden no tener ancestry común y requieren una reconciliación manual deliberada. Cada candidato se reconstruye desde el `origin/main` actual; `chore/upstream-sync` es una rama descartable de automatización, no una segunda rama de producto de larga duración. Los conflictos deben resolverse manualmente; nunca se fuerza `main` ni se reparan dependencias upstream automáticamente.
+`.github/workflows/upstream-sync.yml` consulta diariamente y mediante ejecución manual las releases oficiales de `mlightcad/cad-viewer`. Sólo admite releases publicadas, estables, sin draft ni prerelease y con tag SemVer final `vX.Y.Z` o `X.Y.Z`; previews, RC y tags sin release quedan excluidos. `upstream/main` se consulta sólo para comprobar ascendencia: nunca es la fuente de una sincronización.
+
+El tag se resuelve hasta su commit real, incluidos tags anotados, y se verifica contra el objeto descargado. La versión debe coincidir con el paquete upstream y no ser menor que la versión integrada. El commit debe pertenecer al historial de `upstream/main` y contener el último baseline upstream ya integrado; si ninguna release contiene todos esos commits, se espera sin retroceder ni publicar una PR. La falta de una release elegible es un estado normal, aunque upstream/main haya avanzado.
+
+Cada candidato se reconstruye desde el `origin/main` actual y fusiona exclusivamente el SHA verificado de la release, mediante merge normal. Los únicos conflictos que se resuelven automáticamente son los seis archivos de infraestructura autorizados, conservando su contenido downstream; un conflicto funcional bloquea el ciclo. Se exige paridad fuera de esos seis archivos, validación del upstream limpio y del candidato, y una segunda verificación de la release, el tag y la base antes del push. `chore/upstream-sync` es una rama descartable de automatización, no una rama de producto.
+
+El auto-merge nativo sólo registra el método MERGE; no omite las protecciones de GitHub. Antes de integrar se requieren `release-policy`, `build`, ambos análisis CodeQL y Vercel, más la protección nativa de resultados CodeQL (errores y alertas de seguridad altas/críticas, sin bypass). La CI verifica además la procedencia y paridad de las PR de sincronización. No se descartan alertas ni se cambian umbrales para lograr un merge. La política operativa completa y el manejo de releases defectuosas están en `docs/DOWNSTREAM_MAINTENANCE.md`.
 
 ## Dependencias y seguridad
 

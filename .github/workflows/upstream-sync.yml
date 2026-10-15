@@ -30,26 +30,6 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Create GitHub App installation token
-        id: sync_app
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
-        with:
-          client-id: ${{ vars.UPSTREAM_SYNC_APP_CLIENT_ID }}
-          private-key: ${{ secrets.UPSTREAM_SYNC_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: cad-view
-          permission-contents: write
-          permission-pull-requests: write
-          permission-workflows: write
-
-      - name: Verify GitHub App access
-        env:
-          GH_TOKEN: ${{ steps.sync_app.outputs.token }}
-        run: |
-          set -euo pipefail
-          gh api "repos/${GITHUB_REPOSITORY}" >/dev/null
-          gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=1" >/dev/null
-
       - name: Checkout downstream history
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -70,13 +50,147 @@ jobs:
         run: |
           git remote add upstream "https://github.com/${UPSTREAM_REPOSITORY}.git"
           git fetch --prune origin main
-          git fetch --prune upstream main
+          git fetch --no-tags --prune upstream main
 
-      - name: Validate clean upstream baseline
+      - name: Select an eligible official stable release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > "$RUNNER_TEMP/stable-release-policy.py" <<'PYTHON'
+          # BEGIN STABLE RELEASE POLICY
+          import json
+          import os
+          import re
+          import subprocess
+
+
+          def version(tag):
+              match = re.fullmatch(r'v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', tag)
+              return tuple(map(int, match.groups())) if match else None
+
+
+          def stable(release):
+              return (not release.get('draft', True)
+                      and not release.get('prerelease', True)
+                      and bool(release.get('published_at'))
+                      and version(release.get('tag_name', '')) is not None)
+
+
+          def choose(releases, floor, baseline, current, resolve, ancestor):
+              candidates = sorted((r for r in releases if stable(r)),
+                                  key=lambda r: version(r['tag_name']), reverse=True)
+              for release in candidates:
+                  if version(release['tag_name']) < floor:
+                      continue
+                  sha = resolve(release['tag_name'])
+                  # Tags outside upstream/main are not eligible official product history.
+                  if not ancestor(sha, 'upstream/main'):
+                      continue
+                  # The adopted upstream history must never be lost, even if its version
+                  # is newer than the most recently published stable release.
+                  if not ancestor(baseline, sha):
+                      continue
+                  if ancestor(sha, current):
+                      continue
+                  return release, sha
+              return None
+
+
+          def git(*args):
+              return subprocess.check_output(['git', *args], text=True).strip()
+
+
+          def ancestor(older, newer):
+              result = subprocess.run(['git', 'merge-base', '--is-ancestor', older, newer],
+                                      check=False)
+              if result.returncode not in (0, 1):
+                  raise RuntimeError('Cannot verify release ancestry')
+              return result.returncode == 0
+
+
+          def api(path):
+              return json.loads(subprocess.check_output(['gh', 'api', path], text=True))
+
+
+          def resolve_tag(repository, tag):
+              ref = api(f'repos/{repository}/git/ref/tags/{tag}')['object']
+              target = ref
+              for _ in range(10):
+                  if target['type'] == 'commit':
+                      break
+                  if target['type'] != 'tag':
+                      raise RuntimeError('Release tag does not resolve to a commit')
+                  target = api(f'repos/{repository}/git/tags/{target["sha"]}')['object']
+              else:
+                  raise RuntimeError('Too many nested annotated tags')
+              subprocess.run(['git', 'fetch', '--no-tags', 'upstream',
+                              f'refs/tags/{tag}'], check=True)
+              if git('rev-parse', 'FETCH_HEAD') != ref['sha']:
+                  raise RuntimeError('Release tag moved while fetching')
+              if git('rev-parse', 'FETCH_HEAD^{commit}') != target['sha']:
+                  raise RuntimeError('Fetched release differs from GitHub tag resolution')
+              return target['sha']
+
+
+          def main():
+              repository = os.environ['UPSTREAM_REPOSITORY']
+              current = git('rev-parse', 'origin/main')
+              baseline = git('merge-base', current, 'upstream/main')
+              allowed = set(os.environ['DOWNSTREAM_ALLOWLIST'].splitlines())
+              changed = set(git('diff', '--no-renames', '--name-only', baseline, current).splitlines())
+              if changed - allowed:
+                  raise RuntimeError('Current main already differs from upstream outside the allowlist')
+              package = json.loads(git('show', f'{baseline}:packages/cad-viewer/package.json'))
+              # A previously integrated preview still sets a numeric version floor.
+              floor = version(package['version'].split('-', 1)[0])
+              if floor is None:
+                  raise RuntimeError('Cannot establish the integrated product version floor')
+              pages = json.loads(subprocess.check_output([
+                  'gh', 'api', '--paginate', '--slurp',
+                  f'repos/{repository}/releases?per_page=100'], text=True))
+              releases = [release for page in pages for release in page]
+              selected = choose(releases, floor, baseline, current,
+                                lambda tag: resolve_tag(repository, tag), ancestor)
+              outputs = {'eligible': 'false', 'baseline_sha': baseline, 'base_sha': current}
+              if selected:
+                  release, sha = selected
+                  published_package = json.loads(git('show', f'{sha}:packages/cad-viewer/package.json'))
+                  if published_package['version'] != release['tag_name'].removeprefix('v'):
+                      raise RuntimeError('Stable release tag does not match the published product version')
+                  outputs.update(eligible='true', upstream_sha=sha,
+                                 release_tag=release['tag_name'], release_id=str(release['id']))
+                  # Snapshot the official release for a second verification before publishing.
+                  with open(os.path.join(os.environ['RUNNER_TEMP'], 'upstream-release.json'), 'w') as handle:
+                      json.dump({'id': release['id'], 'tag_name': release['tag_name'],
+                                 'published_at': release['published_at'], 'sha': sha}, handle)
+                  message = f'Eligible stable release: {release["tag_name"]} at {sha}.'
+              else:
+                  message = ('No eligible stable release. Main is unchanged; waiting for an official '
+                             'stable release containing all previously integrated upstream commits.')
+              print(message)
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as handle:
+                  for key, value in outputs.items():
+                      handle.write(f'{key}={value}\n')
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as handle:
+                  handle.write(f'## Stable upstream release selection\n\n{message}\n\n'
+                               f'Integrated upstream baseline: `{baseline}`.\n')
+
+
+          if __name__ == '__main__':
+              main()
+          # END STABLE RELEASE POLICY
+          PYTHON
+          python3 "$RUNNER_TEMP/stable-release-policy.py"
+
+      - name: Validate clean upstream release
         id: upstream_health
+        if: steps.release.outputs.eligible == 'true'
+        env:
+          UPSTREAM_SHA: ${{ steps.release.outputs.upstream_sha }}
         run: |
           set -o pipefail
-          upstream_sha="$(git rev-parse upstream/main)"
+          upstream_sha="$UPSTREAM_SHA"
           echo "upstream_sha=${upstream_sha}" >> "$GITHUB_OUTPUT"
           health_dir="$RUNNER_TEMP/cad-view-upstream-health"
           failed_command="git worktree add --detach ${health_dir} ${upstream_sha}"
@@ -115,32 +229,12 @@ jobs:
           run_check pnpm build
           run_check pnpm test
 
-      - name: Check upstream/downstream ancestry
-        id: topology
-        env:
-          UPSTREAM_SHA: ${{ steps.upstream_health.outputs.upstream_sha }}
-        run: |
-          merge_base="$(git merge-base origin/main upstream/main || true)"
-          if [ -z "$merge_base" ]; then
-            {
-              echo '## Healthy upstream — initial parity reconciliation required'
-              echo
-              echo "- Upstream SHA: \`${UPSTREAM_SHA}\`"
-              echo '- Clean upstream passed its own validation baseline.'
-              echo '- Downstream and upstream have no merge base.'
-              echo '- No synchronization branch or PR was published; downstream main was not modified.'
-            } >> "$GITHUB_STEP_SUMMARY"
-            echo 'common_ancestry=false' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "merge_base=${merge_base}" >> "$GITHUB_OUTPUT"
-          echo 'common_ancestry=true' >> "$GITHUB_OUTPUT"
-
       - name: Rebuild synchronization candidate from current main
         id: reconcile
-        if: steps.topology.outputs.common_ancestry == 'true'
+        if: steps.release.outputs.eligible == 'true'
         env:
-          UPSTREAM_SHA: ${{ steps.upstream_health.outputs.upstream_sha }}
+          UPSTREAM_SHA: ${{ steps.release.outputs.upstream_sha }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
         run: |
           if git ls-remote --exit-code --heads origin "${SYNC_BRANCH}" >/dev/null 2>&1; then
             git fetch --prune origin "${SYNC_BRANCH}"
@@ -148,22 +242,23 @@ jobs:
           git switch --detach origin/main
           git branch -f "${SYNC_BRANCH}" origin/main
           git switch "${SYNC_BRANCH}"
-          if ! git merge --no-edit --no-ff upstream/main; then
-            git merge --abort || true
-            {
-              echo '## Upstream synchronization blocked'
-              echo
-              echo "- Upstream SHA: \`${UPSTREAM_SHA}\`"
-              echo '- Reason: reconciliation conflict after clean upstream passed health validation.'
-              echo '- Downstream main was not modified and no candidate was pushed.'
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 1
+          # Resolve only infrastructure conflicts by preserving the approved local
+          # files. All product conflicts stop the synchronization without a push.
+          if ! git merge --no-commit --no-ff "$UPSTREAM_SHA"; then
+            while IFS= read -r path; do
+              if ! printf '%s\n' "$DOWNSTREAM_ALLOWLIST" | grep -Fxq "$path"; then
+                git merge --abort
+                echo "Product conflict outside the downstream allowlist: $path" >&2
+                exit 1
+              fi
+            done < <(git diff --name-only --diff-filter=U)
           fi
-          if git diff --quiet origin/main HEAD; then
-            echo 'changed=false' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          actual_files="$(git diff --name-only upstream/main HEAD | sort)"
+          while IFS= read -r path; do
+            git restore --source=origin/main --staged --worktree -- "$path"
+          done <<< "$DOWNSTREAM_ALLOWLIST"
+          test -z "$(git diff --name-only --diff-filter=U)"
+          git commit -m "chore: synchronize official stable release $RELEASE_TAG"
+          actual_files="$(git diff --no-renames --name-only "$UPSTREAM_SHA" HEAD | sort)"
           if [ "${actual_files}" != "${DOWNSTREAM_ALLOWLIST}" ]; then
             {
               echo '## Synchronization candidate blocked'
@@ -180,7 +275,7 @@ jobs:
       - name: Validate reconciled synchronization candidate
         if: steps.reconcile.outputs.changed == 'true'
         env:
-          UPSTREAM_SHA: ${{ steps.upstream_health.outputs.upstream_sha }}
+          UPSTREAM_SHA: ${{ steps.release.outputs.upstream_sha }}
         run: |
           set -o pipefail
           failed_command=''
@@ -212,6 +307,51 @@ jobs:
           run_check pnpm build
           run_check pnpm test
 
+      - name: Revalidate release and target before publishing
+        if: steps.reconcile.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_BASE: ${{ steps.release.outputs.base_sha }}
+        run: |
+          git fetch --no-tags origin main
+          test "$(git rev-parse origin/main)" = "$EXPECTED_BASE"
+          python3 - <<'PYTHON'
+          import json
+          import os
+          import runpy
+          policy = runpy.run_path(os.path.join(os.environ['RUNNER_TEMP'], 'stable-release-policy.py'))
+          with open(os.path.join(os.environ['RUNNER_TEMP'], 'upstream-release.json')) as handle:
+              snapshot = json.load(handle)
+          repository = os.environ['UPSTREAM_REPOSITORY']
+          release = policy['api'](f'repos/{repository}/releases/{snapshot["id"]}')
+          if not policy['stable'](release) or any(release[key] != snapshot[key] for key in ('tag_name', 'published_at')):
+              raise RuntimeError('Official release was withdrawn or changed during validation')
+          if policy['resolve_tag'](repository, snapshot['tag_name']) != snapshot['sha']:
+              raise RuntimeError('Official release tag moved during validation')
+          PYTHON
+
+      - name: Create GitHub App installation token
+        id: sync_app
+        if: steps.reconcile.outputs.changed == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ vars.UPSTREAM_SYNC_APP_CLIENT_ID }}
+          private-key: ${{ secrets.UPSTREAM_SYNC_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: cad-view
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+
+      - name: Verify GitHub App access
+        if: steps.reconcile.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.sync_app.outputs.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}" >/dev/null
+          gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=1" >/dev/null
+
       - name: Push synchronization branch
         if: steps.reconcile.outputs.changed == 'true'
         env:
@@ -228,11 +368,12 @@ jobs:
         if: steps.reconcile.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ steps.sync_app.outputs.token }}
-          UPSTREAM_SHA: ${{ steps.upstream_health.outputs.upstream_sha }}
+          UPSTREAM_SHA: ${{ steps.release.outputs.upstream_sha }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
         run: |
           set -euo pipefail
-          title="chore: synchronize upstream main ${UPSTREAM_SHA}"
-          body="Automated upstream synchronization from mlightcad/cad-viewer. Source SHA: ${UPSTREAM_SHA}. Clean upstream health, ancestry, exact allowlist parity, and candidate validation passed."
+          title="chore: synchronize upstream stable release ${RELEASE_TAG}"
+          body="Official stable release: https://github.com/${UPSTREAM_REPOSITORY}/releases/tag/${RELEASE_TAG}. Verified tag commit: ${UPSTREAM_SHA}. The release includes all previously integrated upstream commits. Clean release validation and exact downstream allowlist parity passed. Native MERGE auto-merge remains subject to required CI, release policy, CodeQL merge protection and Vercel; security alerts must not be bypassed."
           existing="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=main&per_page=100" | jq -r --arg branch "${SYNC_BRANCH}" '[.[] | select(.base.ref == "main" and .head.ref == $branch)] | .[0].number // empty')"
           if [ -n "${existing}" ]; then
             response="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${existing}" -f title="${title}" -f body="${body}")"
@@ -261,6 +402,8 @@ jobs:
           fi
 
           if [ "${current_method}" != "merge" ]; then
+            # GraphQL variables are literal; the shell must not expand them.
+            # shellcheck disable=SC2016
             auto_merge_response="$(gh api graphql \
               -f query='mutation($pullRequestId: ID!) { enablePullRequestAutoMerge(input: {pullRequestId: $pullRequestId, mergeMethod: MERGE}) { pullRequest { number autoMergeRequest { mergeMethod } } } }' \
               -F pullRequestId="${pr_node_id}")"
