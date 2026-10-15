@@ -31,4 +31,10 @@ Los cambios que afecten al viewer visible deben añadir la validación E2E de up
 
 ## Sincronización
 
-`.github/workflows/upstream-sync.yml` comprueba upstream automáticamente cada día y mediante ejecución manual. Primero valida upstream limpio y separa esa salud de la sincronizabilidad con downstream. Antes de la primera paridad, la ausencia de ancestry común se reporta como adopción inicial saludable pendiente de reconciliación manual; después, un candidato saludable se construye desde el `origin/main` actual y puede producir o actualizar un único PR. `chore/upstream-sync` es una rama descartable; conflictos o fallas de validación detienen el workflow con un resumen y dejan `main` intacto, sin force-push, merge automático ni reparación de dependencias.
+Sólo se adoptan releases oficiales estables y publicadas de `mlightcad/cad-viewer`, con un tag final SemVer y su SHA real verificado. Se excluyen drafts, previews, prereleases y commits de `upstream/main` que todavía no estén en una release elegible. No se actualizan versiones, overrides o lockfile de forma independiente.
+
+La release debe contener todos los commits upstream ya integrados y no reducir la versión del producto. Si la última estable es anterior al baseline integrado, el espejo espera la siguiente publicación sin hacer downgrade. La paridad se mide contra la release adoptada; la diferencia con upstream/main es un retraso deliberado y visible.
+
+La automatización valida primero el árbol limpio de la release y después el candidato. Sólo publica una PR si pasan instalación congelada, lint, build, tests, ascendencia y paridad fuera de las seis excepciones locales. Se preservan las dependencias y el lockfile exactos de upstream. Los gates de CI, E2E, CodeQL, procedencia de release y Vercel deben aprobar antes del merge normal. Las alertas bloqueantes nunca se ignoran ni se descartan para acelerar la sincronización.
+
+Las vulnerabilidades heredadas se mantienen visibles y se remiten a upstream. Si una release elegible contiene una alerta que bloquea el merge, se espera una release estable corregida. Una excepción urgente requiere una decisión explícita y documentada fuera del mantenimiento automático; no forma parte de este espejo estable. Véase `DOWNSTREAM_MAINTENANCE.md` para el procedimiento ante una release defectuosa.
