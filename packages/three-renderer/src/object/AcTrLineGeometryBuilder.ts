@@ -345,8 +345,14 @@ function segmentsProperlyIntersect(
 }
 
 /**
- * Builds triangle geometry from a small fill loop, already translated by
- * `worldOffset` so the Float32Array never stores large WCS coordinates.
+ * Builds rebased triangle geometry from a small fill loop.
+ *
+ * Vertices are written already relative to `worldOffset` (subtracted before
+ * the float32 store, not after) so large WCS coordinates do not quantize to
+ * a shared value before the rebase gets a chance to run -- see #729 / #724.
+ * A polyline's width is a geometric offset (centre ± width/2); at large
+ * coordinates a float32's ULP can exceed that offset, collapsing both edges
+ * onto the same stored value and making the fill a wedge or disappear.
  */
 function buildSmallFillLoopMesh(
   loop: AcTrSmallFillLoopGeometry,
@@ -359,7 +365,7 @@ function buildSmallFillLoopMesh(
     const point = loop.points[i]
     positions[offset++] = point.x - worldOffset.x
     positions[offset++] = point.y - worldOffset.y
-    positions[offset++] = 0 - worldOffset.z
+    positions[offset++] = -worldOffset.z
   }
 
   const geometry = new THREE.BufferGeometry()
@@ -560,6 +566,9 @@ function buildOffsetRingMesh(
     ) {
       return null
     }
+    // Pre-offset before the float32 store -- see #729. Writing raw WCS
+    // coordinates here let a polyline's width (outer vs inner edge) collapse
+    // to the same float32 value at large coordinates.
     positions[i * 3] = outerPoint.x - worldOffset.x
     positions[i * 3 + 1] = outerPoint.y - worldOffset.y
     positions[i * 3 + 2] = (outerPoint.z ?? 0) - worldOffset.z
@@ -611,18 +620,19 @@ export function buildOffsetRingDirectGeometry(
   traits: AcGiSubEntityTraits,
   context: AcTrRenderContext
 ): AcTrBuiltDirectGeometry | null {
-  const wcsBbox = computeWcsBboxFromPoints([...outer, ...inner])
-  if (wcsBbox.isEmpty()) {
-    return null
-  }
+  const wcsBbox = computeWcsBboxFromPoints(outer).union(
+    computeWcsBboxFromPoints(inner)
+  )
+  if (wcsBbox.isEmpty()) return null
   const worldOffset = wcsBbox.getCenter(new THREE.Vector3())
   const geometry = buildOffsetRingMesh(outer, inner, worldOffset)
   if (!geometry) return null
-  const boundingBox = AcTrBufferGeometryUtil.safeComputeBoundingBox(geometry)
-  if (!boundingBox || boundingBox.isEmpty()) {
+  const localBox = AcTrBufferGeometryUtil.safeComputeBoundingBox(geometry)
+  if (!localBox || localBox.isEmpty()) {
     geometry.dispose()
     return null
   }
+  AcTrBufferGeometryUtil.safeComputeBoundingSphere(geometry)
   _areaBuildStats.offsetRingFastPath++
   return {
     kind: 'mesh',
@@ -631,6 +641,43 @@ export function buildOffsetRingDirectGeometry(
     wcsBbox,
     material: context.styleManager.getFillMaterial(traits)
   }
+}
+
+/**
+ * Midpoint loop between index-aligned outer/inner offset rings.
+ *
+ * Wide polylines are filled in world units. At fit-zoom a small
+ * `constantWidth` under a large INSERT scale often projects to ≪ 1 device
+ * pixel and disappears. Stroking this centerline (hairline / lineweight)
+ * keeps the frame visible while the fill still shows true width when zoomed
+ * in — typical for title-block frames.
+ *
+ * @returns Closed centerline (≥ 3 points), or `null` when the rings are not
+ *   aligned.
+ */
+export function buildOffsetRingCenterline(
+  outer: AcGePoint3dLike[],
+  inner: AcGePoint3dLike[]
+): AcGePoint3dLike[] | null {
+  const outerCount = openLoopCount(outer)
+  const innerCount = openLoopCount(inner)
+  if (outerCount !== innerCount || outerCount < 2) {
+    return null
+  }
+
+  const centerline: AcGePoint3dLike[] = new Array(outerCount + 1)
+  for (let i = 0; i < outerCount; i++) {
+    const outerPoint = outer[i]
+    const innerPoint = inner[i]
+    centerline[i] = {
+      x: (outerPoint.x + innerPoint.x) * 0.5,
+      y: (outerPoint.y + innerPoint.y) * 0.5,
+      z: ((outerPoint.z ?? 0) + (innerPoint.z ?? 0)) * 0.5
+    }
+  }
+  const first = centerline[0]
+  centerline[outerCount] = { x: first.x, y: first.y, z: first.z }
+  return centerline
 }
 
 /** Drops a repeated closing vertex so a closed loop can be stitched by index. */
@@ -724,18 +771,22 @@ export function buildAreaGeometry(
 
   let geometry: THREE.BufferGeometry
   let resolvedMaterial: THREE.Material | undefined
+  // Set only by the small-loop fast path: that geometry is written already
+  // rebased (see buildSmallFillLoopMesh), from the loop's own double-precision
+  // points, so it must not go through the generic post-build rebase below a
+  // second time (and its bbox is likewise computed pre-float32 for #729).
+  let prebasedWorldOffset: THREE.Vector3 | undefined
+  let prebasedWcsBbox: THREE.Box3 | undefined
 
   let capturedWorldOffset: THREE.Vector3 | undefined
 
   if (smallLoop) {
     _areaBuildStats.smallLoopFastPath++
-    const wcsPoints = smallLoop.points.map(point => ({
-      x: point.x,
-      y: point.y,
-      z: 0
-    }))
-    capturedWorldOffset = computeLocalOrigin(wcsPoints)
-    geometry = buildSmallFillLoopMesh(smallLoop, capturedWorldOffset)
+    prebasedWcsBbox = computeWcsBboxFromPoints(
+      smallLoop.points.map(p => ({ x: p.x, y: p.y, z: 0 }))
+    )
+    prebasedWorldOffset = prebasedWcsBbox.getCenter(new THREE.Vector3())
+    geometry = buildSmallFillLoopMesh(smallLoop, prebasedWorldOffset)
     resolvedMaterial = context.styleManager.getFillMaterial(traits)
   } else {
     _areaBuildStats.generalPath++
@@ -784,19 +835,35 @@ export function buildAreaGeometry(
     }
   }
 
-  const boundingBox = AcTrBufferGeometryUtil.safeComputeBoundingBox(geometry)
-  if (!boundingBox || boundingBox.isEmpty()) {
-    geometry.dispose()
-    return null
-  }
-
-  const worldOffset =
-    capturedWorldOffset ?? boundingBox.getCenter(new THREE.Vector3())
-  const wcsBbox = capturedWorldOffset
-    ? boundingBox.clone().translate(capturedWorldOffset)
-    : boundingBox.clone()
-  if (!capturedWorldOffset) {
-    rebaseGeometryPositions(geometry, worldOffset)
+  let wcsBbox: THREE.Box3
+  let worldOffset: THREE.Vector3
+  if (prebasedWcsBbox && prebasedWorldOffset) {
+    // Already rebased at write time; the geometry's own (local-space) bbox
+    // would not be the WCS one needed for gradientBounds below.
+    wcsBbox = prebasedWcsBbox
+    worldOffset = prebasedWorldOffset
+    const localBox = AcTrBufferGeometryUtil.safeComputeBoundingBox(geometry)
+    if (!localBox || localBox.isEmpty()) {
+      geometry.dispose()
+      return null
+    }
+    AcTrBufferGeometryUtil.safeComputeBoundingSphere(geometry)
+  } else {
+    const boundingBox = AcTrBufferGeometryUtil.safeComputeBoundingBox(geometry)
+    if (!boundingBox || boundingBox.isEmpty()) {
+      geometry.dispose()
+      return null
+    }
+    // AcTrPolygon origin-shifts solid fills before float32 upload (#724);
+    // reuse that mesh.position so local verts are not rebased again.
+    worldOffset =
+      capturedWorldOffset ?? boundingBox.getCenter(new THREE.Vector3())
+    wcsBbox = capturedWorldOffset
+      ? boundingBox.clone().translate(capturedWorldOffset)
+      : boundingBox.clone()
+    if (!capturedWorldOffset) {
+      rebaseGeometryPositions(geometry, worldOffset)
+    }
   }
 
   const gradientBounds = {
