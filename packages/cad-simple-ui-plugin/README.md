@@ -207,6 +207,8 @@ Searched fields:
 | `MULTILEADER`                                    | `contents`                                                                                             | formatting codes removed                                                                                                                                                        |
 | `ACAD_TABLE`                                     | cell text                                                                                              | from the table block, otherwise the cell strings                                                                                                                                |
 
+`DIMENSION`, `MULTILEADER` and `ACAD_TABLE` are searched as top-level entities only (in model space or a layout); they are not visited inside block definitions, so such an entity nested in a block is not found. Top-level `INSERT` attributes and the `TEXT` / `MTEXT` / `ATTRIB` / constant `ATTDEF` text inside block definitions are searched as described above.
+
 Matching:
 
 - Partial (substring) match; the query is trimmed and runs of whitespace collapse to one space
@@ -219,7 +221,7 @@ Matching:
 Usage:
 
 - Search runs only on **Enter** / the Find button (never while typing, never in the background). Both start a search and jump to the first hit; further Enter / Shift+Enter steps through the list. The scan is a single synchronous pass over the entities of the searched layouts (including the block definitions they insert); nothing is cached or stored globally
-- Each result shows its **layout name**, the matched text, type (Text / MText / Attribute + block / tag), layer and `(x, y)`
+- Each result shows its **layout name** (a layout with an empty name is shown as a localized "(unnamed layout)" placeholder), the matched text, type (Text / MText / Attribute / Block text / Dimension / Leader / Table; attributes also show block / tag), layer and `(x, y)`. Labels are translated in en, zh, cs, tr and ar; a message missing from the active locale falls back to English instead of showing its key
 - Click a result (or press Enter / Shift+Enter in the field to step through them) to zoom to the text and select its entity (attributes select their `INSERT`). Selection uses the normal selection set/highlight, so Escape or clicking elsewhere clears it. Pan, wheel/pinch zoom, layers and touch handling are untouched
 - A hit in another layout switches to that layout first (`layoutManager.setCurrentLayoutBtrId`), waits for its entities to be converted, then zooms and selects. The layout's first-visit auto zoom is suppressed so it cannot override the zoom to the hit. If the layout cannot be opened a notice is shown instead
 - With **Current layout only**, if the active layout changed since the search, clicking a result re-runs the search for the new layout instead of navigating (drawing-wide results stay valid)
@@ -277,9 +279,9 @@ By default the plugin uses `layout: 'auto'` and follows viewport width via `aced
 
 | Kind | Viewport | Chrome | Default buttons (`items: 'default'`) |
 | --- | --- | --- | --- |
-| **phone** | ≤600px | Bottom bar, full width (`size: 'stretch'`), labels, `edgeOffset: 0`, not collapsible, no flyout arrows. Nested strips use `replaceOnNested: true`. | `zoom` (saved / extents / smart extents / window), `measure`, `annotation`, `layer`, `layout`, `settings` (simulated mouse, placement, theme, background, reading mode, language) |
+| **phone** | ≤600px | Bottom bar, full width (`size: 'stretch'`), labels, `edgeOffset: 0`, not collapsible, no flyout arrows. Nested strips use `replaceOnNested: true`. | `zoom` (saved / extents / smart extents / window), `find`, `measure`, `annotation`, `layer`, `layout`, `settings` (simulated mouse, placement, theme, background, reading mode, language) |
 | **pad** | 601–960px | Same floating chrome as desktop (right, icons only, `edgeOffset: 8`). | Desktop set **without** `select` and `pan` (`excludeItems: ['select', 'pan']`). Touch drag pans; a long-press starts window/crossing box select. |
-| **desktop** | >960px | Right-side floating icon toolbar. | `select`, `pan`, `zoom` (saved / extents / smart extents / window), `layer`, `layout`, `measure`, `annotation`, `export`, then `settings` (simulated mouse, placement, theme, background, reading mode, language) |
+| **desktop** | >960px | Right-side floating icon toolbar. | `select`, `pan`, `zoom` (saved / extents / smart extents / window), `find`, `layer`, `layout`, `measure`, `annotation`, `export`, then `settings` (simulated mouse, placement, theme, background, reading mode, language). **Open** is not shown; add it with `{ preset: 'open' }` or `acuiToolbarPreset('open')`. |
 
 Phone does **not** inherit top-level `toolbar.items`, `appendItems`, or chrome (placement, labels, size). It only inherits `enabled`, `mountTarget`, and `inCanvasParent`. Pad and desktop inherit the full top-level `toolbar` baseline on top of the built-ins above.
 
@@ -403,7 +405,7 @@ See `cad-simple-viewer-example` (`demoToolbarPresets.ts`) for a working layout s
 | `preset` | Reference a built-in button by id (custom layouts only; use `{ preset: 'pan' }`) |
 | `disabled` | `boolean` or `() => boolean` |
 
-Built-in preset ids include: `select`, `pan`, `zoom` (saved / extents / smart extents / window), `layer`, `measure`, `export`, `toolbar-placement`, `switch-bg`, `theme`, `locale`, and nested ids such as `placement-top`, `measure-distance`, `export-html`, `locale-en`, `locale-zh`, `locale-cs`, `locale-tr`, etc.
+Built-in preset ids include: `open` (not on the default toolbar; local picker, or a data-source menu), `select`, `pan`, `zoom` (saved / extents / smart extents / window), `layer`, `measure`, `export`, `toolbar-placement`, `switch-bg`, `theme`, `locale`, and nested ids such as `placement-top`, `measure-distance`, `export-html`, `locale-en`, `locale-zh`, `locale-cs`, `locale-tr`, etc.
 
 ### 1. Default toolbar + extra buttons
 

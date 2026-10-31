@@ -21,11 +21,16 @@ const config: Config = {
     ]
   },
   transformIgnorePatterns: [
-    '/node_modules/(?!.*(mtext-parser|rbush|quickselect))'
+    // three@0.186's CJS entry re-exports ESM (`three.module.js` / `three.core.js`).
+    '/node_modules/(?!.*(mtext-parser|rbush|quickselect|three/build/three))'
   ],
   testPathIgnorePatterns: ['/e2e/', '/__tests__/helpers/'],
   moduleNameMapper: {
     '^lodash-es$': 'lodash',
+    '^@mlightcad/cad-html-core$':
+      '<rootDir>/packages/cad-html-core/src/index.ts',
+    '^@mlightcad/cad-agent-core$':
+      '<rootDir>/packages/cad-agent-core/src/index.ts',
     '^@mlightcad/cad-simple-viewer$':
       '<rootDir>/packages/cad-simple-viewer/src/index.ts',
     '^@mlightcad/cad-simple-viewer/icons$':

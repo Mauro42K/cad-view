@@ -7,7 +7,10 @@ dist
 dist-runner
 lib
 tmp
+tmp-*/
 tsconfig.tsbuildinfo
+# Copied from cad-html-plugin/dist during cad-html-exporter build
+packages/cad-html-exporter/runtime/
 
 # dependencies
 node_modules
